@@ -11,8 +11,6 @@ let sesion = {
     plantilla:   null   // objeto completo cargado desde DB
 };
 
-let chartDistribucion = null;
-
 // ══════════════════════════════════════
 //  TOAST
 // ══════════════════════════════════════
@@ -208,14 +206,26 @@ $('#btnNuevaPlantilla').addEventListener('click', () => {
 //  EDITOR DE PLANTILLA
 // ══════════════════════════════════════
 
-// Colores para componentes
+// Colores fijos por clave de componente conocida
+const KEY_COLORS = {
+    EJERCICIO:    '#16a34a',  // verde
+    CATEDRA:      '#8b5cf6',  // morado
+    EXAMEN:       '#dc2626',  // rojo
+    LABORATORIO:  '#0d9488',
+    TALLER:       '#f97316',
+    PROYECTO:     '#3b82f6',
+    INFORME:      '#d97706',
+    CONTROL:      '#6366f1',
+};
+
+// Colores para componentes sin key conocida
 const COMP_COLORS = ['#f97316','#3b82f6','#16a34a','#dc2626','#8b5cf6','#0d9488','#d97706'];
 
 /**
  * Estado temporal del editor.
  * componentes: [ { key, label, peso, color, subs: [{nombre, porcentaje}] } ]
  */
-let editorPlantilla = { id: null, nombre: '', componentes: [], umbralEximen: 5.0, examenObligatorio: false };
+let editorPlantilla = { id: null, nombre: '', componentes: [], umbralEximen: 5.5, examenObligatorio: false };
 
 async function abrirEditorPlantilla(plantillaId) {
     $('#tituloModalRamo').textContent = plantillaId ? '✏ Editar Ramo' : '📘 Nuevo Ramo';
@@ -224,7 +234,7 @@ async function abrirEditorPlantilla(plantillaId) {
         editorPlantilla = {
             id: p.id,
             nombre: p.nombre,
-            umbralEximen:      p.umbralEximen      ?? 5.0,
+            umbralEximen:      5.5,
             examenObligatorio: p.examenObligatorio ?? false,
             componentes: JSON.parse(JSON.stringify(p.componentes)) // deep copy
         };
@@ -233,11 +243,11 @@ async function abrirEditorPlantilla(plantillaId) {
         editorPlantilla = {
             id: null,
             nombre: '',
-            umbralEximen: 5.0,
+            umbralEximen: 5.5,
             examenObligatorio: false,
             componentes: [
                 {
-                    key: 'EJERCICIO', label: 'Ejercicios', peso: 30, color: '#6366f1',
+                    key: 'EJERCICIO', label: 'Ejercicios', peso: 30, color: '#16a34a',
                     subs: [
                         { nombre: 'Ejercicio 1', porcentaje: 25 },
                         { nombre: 'Ejercicio 2', porcentaje: 25 },
@@ -256,7 +266,7 @@ async function abrirEditorPlantilla(plantillaId) {
                     ]
                 },
                 {
-                    key: 'EXAMEN', label: 'Examen', peso: 25, color: '#22c55e',
+                    key: 'EXAMEN', label: 'Examen', peso: 25, color: '#dc2626',
                     subs: [{ nombre: 'Examen', porcentaje: 100 }]
                 }
             ]
@@ -264,9 +274,7 @@ async function abrirEditorPlantilla(plantillaId) {
     }
 
     $('#inputNombreRamo').value = editorPlantilla.nombre;
-    $('#editUmbralEximen').value        = editorPlantilla.umbralEximen;
     $('#editExamenObligatorio').checked = editorPlantilla.examenObligatorio;
-    $('#editUmbralEximen').disabled     = editorPlantilla.examenObligatorio;
     renderEditorCompleto();
     openModal('modalEditarRamo');
 }
@@ -416,10 +424,6 @@ function actualizarTotalPesosComps() {
 }
 
 // Guardar plantilla
-$('#editExamenObligatorio').addEventListener('change', e => {
-    $('#editUmbralEximen').disabled = e.target.checked;
-});
-
 $('#btnGuardarPlantilla').addEventListener('click', async () => {
     const nombre = $('#inputNombreRamo').value.trim();
     if (!nombre) { toast('Ingresa un nombre para el ramo', 'error'); return; }
@@ -440,7 +444,7 @@ $('#btnGuardarPlantilla').addEventListener('click', async () => {
     }
 
     editorPlantilla.nombre            = nombre;
-    editorPlantilla.umbralEximen      = parseFloat($('#editUmbralEximen').value);
+    editorPlantilla.umbralEximen      = 5.5;
     editorPlantilla.examenObligatorio = $('#editExamenObligatorio').checked;
     const payload = {
         nombre:            editorPlantilla.nombre,
@@ -488,6 +492,7 @@ async function mostrarNotas() {
 
     renderizarTabla(plantilla, notasAlumno);
     actualizarResumen(plantilla, notasAlumno);
+    actualizarHintsEximen(plantilla, notasAlumno);
 
     $('#notasSection').style.display = '';
     $('#emptyState').style.display   = 'none';
@@ -520,7 +525,7 @@ function renderizarTabla(plantilla, notasAlumno) {
                 tdComp.rowSpan = rowspan;
                 tdComp.className = 'td-componente';
                 tdComp.innerHTML = `
-                    <div class="comp-badge" style="--comp-color:${comp.color || '#6366f1'}">
+                    <div class="comp-badge" style="--comp-color:${KEY_COLORS[comp.key] || comp.color || COMP_COLORS[0]}">
                         <span class="comp-badge-label">${comp.label.toUpperCase()}</span>
                         <span class="comp-badge-peso">${comp.peso}%</span>
                     </div>
@@ -548,9 +553,22 @@ function renderizarTabla(plantilla, notasAlumno) {
             if (notaVal !== null) inp.value = notaVal;
             inp.dataset.compKey   = comp.key;
             inp.dataset.subNombre = sub.nombre;
+            inp.addEventListener('input',  () => {
+                const notasDOM = leerNotasDesdeDOM();
+                actualizarResumen(sesion.plantilla, notasDOM);
+                actualizarFilasPonderado(sesion.plantilla, notasDOM);
+                actualizarHintsEximen(sesion.plantilla, notasDOM);
+            });
             inp.addEventListener('change', () => guardarNotaDesdeInput(inp));
-            inp.addEventListener('blur',   () => guardarNotaDesdeInput(inp));
             tdNota.appendChild(inp);
+            // Hint de nota mínima para eximirse (solo no-EXAMEN y con % real)
+            if (comp.key !== 'EXAMEN' && (sub.porcentaje || 0) > 0) {
+                const hintEl = document.createElement('div');
+                hintEl.className = 'exim-hint';
+                hintEl.dataset.hintComp = comp.key;
+                hintEl.dataset.hintSub  = sub.nombre;
+                tdNota.appendChild(hintEl);
+            }
             tr.appendChild(tdNota);
 
             // Ponderado
@@ -575,6 +593,47 @@ function renderizarTabla(plantilla, notasAlumno) {
     }
 }
 
+/** Lee las notas actuales directamente del DOM (sin ir a la BD) */
+function leerNotasDesdeDOM() {
+    const notas = [];
+    $('#tablaNotas').querySelectorAll('.input-nota').forEach(inp => {
+        const val = inp.value !== '' ? parseFloat(inp.value) : null;
+        notas.push({ compKey: inp.dataset.compKey, subNombre: inp.dataset.subNombre, nota: val });
+    });
+    return notas;
+}
+
+/** Actualiza los hints de nota mínima para eximirse en cada sub vacía */
+function actualizarHintsEximen(plantilla, notasAlumno) {
+    const hayNotas = notasAlumno.some(n => n.nota != null);
+
+    $('#tablaNotas').querySelectorAll('.exim-hint').forEach(hint => {
+        const compKey   = hint.dataset.hintComp;
+        const subNombre = hint.dataset.hintSub;
+        const inp = hint.previousElementSibling;
+
+        // Si el campo tiene nota o no hay ninguna nota en la tabla, ocultar hint
+        if ((inp && inp.value !== '') || !hayNotas) {
+            hint.textContent = '';
+            hint.className   = 'exim-hint';
+            return;
+        }
+
+        const min = calcularNotaParaEximirseEnSub(plantilla, notasAlumno, compKey, subNombre);
+        if (min === null) { hint.textContent = ''; return; }
+
+        if (min <= 1.0) {
+            hint.textContent = '✓ libre';
+            hint.className   = 'exim-hint exim-hint--ok';
+        } else {
+            // Capamos en 7.0: si es imposible igual mostramos 7.0 como meta máxima
+            const target = Math.min(Math.ceil(min * 10) / 10, 7.0);
+            hint.textContent = `≥ ${target.toFixed(1)}`;
+            hint.className   = min > 7.0 ? 'exim-hint exim-hint--impossible' : 'exim-hint';
+        }
+    });
+}
+
 async function guardarNotaDesdeInput(inp) {
     const compKey   = inp.dataset.compKey;
     const subNombre = inp.dataset.subNombre;
@@ -593,6 +652,7 @@ async function guardarNotaDesdeInput(inp) {
     const notasActualizadas = await obtenerNotasPorUsuarioPlantilla(sesion.usuarioId, sesion.plantillaId);
     actualizarResumen(sesion.plantilla, notasActualizadas);
     actualizarFilasPonderado(sesion.plantilla, notasActualizadas);
+    actualizarHintsEximen(sesion.plantilla, notasActualizadas);
 }
 
 /** Actualiza solo las celdas de ponderado y promedio sin re-renderizar la tabla */
@@ -625,7 +685,7 @@ function actualizarFilasPonderado(plantilla, notasAlumno) {
 //  RESUMEN Y GRÁFICO
 // ══════════════════════════════════════
 function actualizarResumen(plantilla, notasAlumno) {
-    const umbralEfectivo = plantilla.umbralEximen ?? 5.0;
+    const umbralEfectivo = 5.5;
     const nf             = calcularNotaFinal(plantilla, notasAlumno, umbralEfectivo);
     const exime          = determinarEximen(plantilla, notasAlumno, umbralEfectivo);
     const estado = determinarEstado(nf);
@@ -634,25 +694,18 @@ function actualizarResumen(plantilla, notasAlumno) {
     const statsList = $('#statsListDynamic');
     statsList.innerHTML = '';
 
-    const chartLabels = [], chartData = [], chartColors = [], chartBorders = [];
-
     plantilla.componentes.forEach((comp, i) => {
         const prom = calcularPromedioComponente(comp, notasAlumno);
         const row  = document.createElement('div');
         row.className = 'stat-row';
         row.innerHTML = `
             <span class="stat-label" style="display:flex;align-items:center;gap:6px;">
-                <span style="width:10px;height:10px;border-radius:50%;background:${comp.color || COMP_COLORS[i%COMP_COLORS.length]};flex-shrink:0;"></span>
+                <span style="width:10px;height:10px;border-radius:50%;background:${KEY_COLORS[comp.key] || comp.color || COMP_COLORS[i%COMP_COLORS.length]};flex-shrink:0;"></span>
                 ${comp.label} <span style="opacity:0.5;font-size:0.78rem;">(${comp.peso}%)</span>
             </span>
             <span class="stat-value">${redondear(prom)}</span>
         `;
         statsList.appendChild(row);
-
-        chartLabels.push(comp.label);
-        chartData.push(prom || 0);
-        chartColors.push((comp.color || COMP_COLORS[i%COMP_COLORS.length]) + 'cc');
-        chartBorders.push(comp.color || COMP_COLORS[i%COMP_COLORS.length]);
     });
 
     // Promedio parcial
@@ -680,6 +733,30 @@ function actualizarResumen(plantilla, notasAlumno) {
     `;
     statsList.appendChild(rowEx);
 
+    // Nota mínima necesaria en el examen para aprobar el ramo
+    const compExamen = plantilla.componentes.find(c => c.key === 'EXAMEN');
+    if (compExamen && !exime) {
+        const minNota = calcularNotaMinimaExamen(plantilla, notasAlumno);
+        if (minNota !== null) {
+            const rowMin = document.createElement('div');
+            rowMin.className = 'stat-row';
+            let valorHtml;
+            if (minNota > 7.0) {
+                valorHtml = `<span class="stat-value stat-value--danger">Imposible</span>`;
+            } else if (minNota <= 1.0) {
+                valorHtml = `<span class="stat-value stat-value--success">Cualquiera</span>`;
+            } else {
+                const minRedondeada = Math.ceil(minNota * 10) / 10;
+                valorHtml = `<span class="stat-value stat-value--warn">${minRedondeada}</span>`;
+            }
+            rowMin.innerHTML = `
+                <span class="stat-label">Mín. examen para aprobar</span>
+                ${valorHtml}
+            `;
+            statsList.appendChild(rowMin);
+        }
+    }
+
     // Nota final
     $('#notaFinalGrande').textContent = redondear(nf);
     const estadoEl = $('#estadoNota');
@@ -687,47 +764,6 @@ function actualizarResumen(plantilla, notasAlumno) {
     estadoEl.className   = 'estado-badge' +
         (estado === 'APROBADO' ? ' aprobado' : estado === 'REPROBADO' ? ' reprobado' : '');
 
-    actualizarGrafico(chartLabels, chartData, chartColors, chartBorders);
-}
-
-function actualizarGrafico(labels, data, colors, borders) {
-    const ctx = document.getElementById('chartDistribucion');
-    if (!ctx) return;
-
-    if (chartDistribucion && chartDistribucion.data.labels.length !== labels.length) {
-        chartDistribucion.destroy(); chartDistribucion = null;
-    }
-    if (chartDistribucion) {
-        chartDistribucion.data.datasets[0].data = data;
-        chartDistribucion.update('none');
-        return;
-    }
-    chartDistribucion = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels,
-            datasets: [{
-                label: 'Promedio',
-                data, backgroundColor: colors, borderColor: borders,
-                borderWidth: 1, borderRadius: 6, maxBarThickness: 70
-            }]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    backgroundColor: 'rgba(22,24,34,0.95)', titleColor: '#f1f5f9',
-                    bodyColor: '#94a3b8', borderColor: 'rgba(255,255,255,0.06)',
-                    borderWidth: 1, cornerRadius: 8, padding: 12
-                }
-            },
-            scales: {
-                y: { beginAtZero: true, max: 7, ticks: { color: '#475569', stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.04)' } },
-                x: { ticks: { color: '#94a3b8' }, grid: { display: false } }
-            }
-        }
-    });
 }
 
 // ══════════════════════════════════════
@@ -751,351 +787,9 @@ $('#btnExportarDatos').addEventListener('click', async () => {
 });
 
 // ══════════════════════════════════════
-//  IMPORTAR DESDE PDF
-// ══════════════════════════════════════
-
-const COLORES_COMP_MAP = {
-    EXAMEN:      '#16a34a',   // verde — aprobación
-    CATEDRA:     '#3b82f6',   // azul  — conocimiento
-    EJERCICIO:   '#f97316',   // naranja — práctica
-    LABORATORIO: '#d97706',   // ámbar — laboratorio
-    TALLER:      '#0d9488',   // teal  — taller
-    PROYECTO:    '#8b5cf6',   // violeta — proyecto
-    INFORME:     '#dc2626',   // rojo  — informe
-    CONTROL:     '#ea580c',   // naranja oscuro — control
-};
-
-function toTitleCase(str) {
-    const minors = new Set(['de','la','el','los','las','en','y','o','e','del','al']);
-    return str.toLowerCase().split(' ').map((w, i) =>
-        i === 0 || !minors.has(w) ? w.charAt(0).toUpperCase() + w.slice(1) : w
-    ).join(' ');
-}
-
-function agruparFilasPDF(items, tol = 5) {
-    const sorted = [...items].sort((a, b) => a.y - b.y || a.x - b.x);
-    const rows = []; let cur = [], curY = null;
-    for (const it of sorted) {
-        if (curY === null || Math.abs(it.y - curY) <= tol) { cur.push(it); curY = curY ?? it.y; }
-        else { if (cur.length) rows.push([...cur].sort((a,b) => a.x - b.x)); cur = [it]; curY = it.y; }
-    }
-    if (cur.length) rows.push(cur.sort((a,b) => a.x - b.x));
-    return rows;
-}
-
-async function parsearPDFUDLA(file) {
-    if (!window.pdfjsLib) throw new Error('pdf.js no está disponible.');
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
-    const ab  = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
-
-    let fullText = '', pondItems = null;
-
-    for (let p = 1; p <= Math.min(pdf.numPages, 15); p++) {
-        const page = await pdf.getPage(p);
-        const tc   = await page.getTextContent();
-        const vp   = page.getViewport({ scale: 1 });
-        const pageTxt = tc.items.map(i => i.str).join(' ');
-        fullText += pageTxt + '\n';
-        if (!pondItems && /PONDERACIONES/i.test(pageTxt)) {
-            pondItems = tc.items.filter(i => i.str?.trim()).map(i => ({
-                str: i.str.trim(),
-                x:   Math.round(i.transform[4]),
-                y:   Math.round(vp.height - i.transform[5]),
-            }));
-        }
-    }
-
-    if (!pondItems)
-        throw new Error('No se encontró la sección PONDERACIONES. ¿Es un programa de asignatura UDLA?');
-
-    const siglaM  = fullText.match(/Sigla\s*:?\s*([A-Z]{2,5}\d{3,4})/i)
-                 || fullText.match(/\b([A-Z]{2,4}\d{3,4})\b/);
-    const nombreM = fullText.match(/Nombre\s*:?\s*([\wáéíóúÁÉÍÓÚñÑ\s,\-\/\.]+?)(?=\s*(?:Crédito|Credito|Vigencia|Jornada|Modalidad|Sigla))/i);
-    const sigla   = siglaM?.[1] ?? '';
-    const nombre  = (nombreM?.[1] ?? '').trim().replace(/\s+/g, ' ');
-
-    // ── Exención de examen ─────────────────────────────────────────────────
-    // Busca la sección "EXIMICIÓN DE EXAMEN"; si no existe → examen obligatorio
-    const eximIdx = fullText.search(/EXIMICI[OÓ]N\s+DE\s+EXAMEN/i);
-    let umbral    = 5.0;
-    let examenObl = false;
-    if (eximIdx < 0) {
-        examenObl = true;   // no hay condición de exención declarada
-    } else {
-        const eximSlice = fullText.slice(eximIdx, eximIdx + 800);
-        // Captura número decimal tipo "5,5" o "5.0" (primer número que aparezca)
-        const numM = eximSlice.match(/\b(\d)[,\.](\d{1,2})\b/);
-        umbral     = numM ? parseFloat(`${numM[1]}.${numM[2]}`) : 5.0;
-    }
-
-    const componentes = extraerComponentesPDF(pondItems);
-    if (!componentes?.length)
-        throw new Error('No se pudieron extraer los componentes de evaluación.');
-
-    return {
-        nombre:            sigla ? `${sigla} — ${nombre}` : nombre || file.name.replace(/\.pdf$/i, ''),
-        umbralEximen:      umbral,
-        examenObligatorio: examenObl,
-        componentes,
-    };
-}
-
-function extraerComponentesPDF(items) {
-    // ══════════════════════════════════════════════════════════════════
-    // Estrategia: clasificar ítems en 4 COLUMNAS exactas usando las
-    // posiciones X del encabezado, luego emparejar por proximidad Y.
-    // Esto resuelve el problema de celdas combinadas (rowspan) del PDF
-    // donde el texto del componente aparece en el CENTRO vertical de
-    // su celda, mientras los subcomponentes están arriba y abajo.
-    // ══════════════════════════════════════════════════════════════════
-
-    // ── 1. Localizar encabezado ──────────────────────────────────────
-    const allRows = agruparFilasPDF(items, 12);
-    let xComp = null, xSub = null, xPctComp = null, xPctSub = null, headerY = -1;
-
-    outerH: for (let i = 0; i < allRows.length; i++) {
-        for (let span = 1; span <= 4 && i + span - 1 < allRows.length; span++) {
-            const win      = allRows.slice(i, i + span).flat();
-            const compItem = win.find(w => /^componente$/i.test(w.str));
-            const subItem  = win.find(w => /^subcomponente$/i.test(w.str));
-            if (!compItem || !subItem || subItem.x <= compItem.x) continue;
-
-            xComp = compItem.x;
-            xSub  = subItem.x;
-
-            // % Componente: busca "%" entre xComp y xSub en el header
-            const pctMid = win.filter(w => /^%/.test(w.str) && w.x > compItem.x && w.x < subItem.x);
-            xPctComp = pctMid.length
-                ? Math.min(...pctMid.map(w => w.x))
-                : Math.round(xComp + (xSub - xComp) * 0.6);
-
-            // % Subcomponente: busca "%" a la derecha de xSub
-            const pctRight = win.filter(w => /^%/.test(w.str) && w.x > subItem.x);
-            xPctSub = pctRight.length
-                ? Math.min(...pctRight.map(w => w.x))
-                : xSub + Math.round((xSub - xComp) * 0.7);
-
-            headerY = Math.max(...win.map(w => w.y));
-            break outerH;
-        }
-    }
-    if (xComp === null) return extraerPorTextoPDF(items);
-
-    console.log(`📄 Columnas detectadas: xComp=${xComp} xPctComp=${xPctComp} xSub=${xSub} xPctSub=${xPctSub}`);
-
-    // ── 2. Ítems válidos bajo el header ─────────────────────────────
-    const STOP_RE = /7\.2|ESTRATEGIA|Nota\s*Informativa|Publicado|Metodolog/i;
-    const SKIP_RE = /^Modalidad$|^Jornada$|^Ponderaci|^%|^TODOS$/i;
-
-    const dataAll = items.filter(i => i.str.trim() && i.y > headerY + 2);
-    let yStop = Infinity;
-    for (const it of dataAll) {
-        if (STOP_RE.test(it.str)) { yStop = Math.min(yStop, it.y); }
-    }
-    const valid = dataAll.filter(i => i.y < yStop && !SKIP_RE.test(i.str));
-
-    // ── 3. Clasificar en 4 columnas por X ───────────────────────────
-    // ┌─────────┬──────────┬──────────────────┬────────────┐
-    // │  Col A  │  Col B   │      Col C       │   Col D    │
-    // │ Comp.   │ % Comp.  │  Subcomponente   │ % Subcomp. │
-    // │ nombre  │ (35,45…) │ (Cat. 1, Ej. 2…) │ (33.33, …) │
-    // └─────────┴──────────┴──────────────────┴────────────┘
-    const mg = 25; // margen de tolerancia en X
-    const colA = valid.filter(i => i.x >= xComp    - mg && i.x < xPctComp);
-    const colB = valid.filter(i => i.x >= xPctComp      && i.x < xSub - 5);
-    const colC = valid.filter(i => i.x >= xSub     - mg && i.x < xPctSub - 5);
-    const colD = valid.filter(i => i.x >= xPctSub  - 5);
-
-    // ── 4. Agrupar cada columna por Y (tolerancia 13) ───────────────
-    const rowsA = agruparFilasPDF(colA, 13);
-    const rowsB = agruparFilasPDF(colB, 13);
-    const rowsC = agruparFilasPDF(colC, 13);
-    const rowsD = agruparFilasPDF(colD, 13);
-
-    // Helper: fila más cercana en Y dentro de maxDist píxeles
-    const rowNearest = (rows, y, maxDist = 20) =>
-        rows.find(r => Math.abs(Math.min(...r.map(i => i.y)) - y) <= maxDist);
-
-    // ── 5. PASADA 1 — Componentes (colA nombre + colB peso) ─────────
-    const compEntries = [];
-    for (const ra of rowsA) {
-        const words = ra.filter(i => /^[A-ZÁÉÍÓÚÑ\/]{3,}$/.test(i.str));
-        if (!words.length) continue;
-        const name = words.map(i => i.str).join(' ');
-        const rowY = Math.min(...ra.map(i => i.y));
-        const rb   = rowNearest(rowsB, rowY);
-        const num  = rb?.find(i => /^\d{1,3}(\.\d+)?$/.test(i.str));
-        const peso = num ? parseFloat(num.str) : null;
-        if (peso !== null && peso > 0 && peso <= 100 && !compEntries.some(c => c.name === name)) {
-            compEntries.push({ name, peso, y: rowY });
-        }
-    }
-    if (!compEntries.length) return extraerPorTextoPDF(items);
-
-    // ── 6. PASADA 2 — Subcomponentes (colC nombre + colD %) ─────────
-    const subEntries = [];
-    for (const rc of rowsC) {
-        const sNom = rc.map(i => i.str).join(' ').trim();
-        if (!sNom) continue;
-        const rowY = Math.min(...rc.map(i => i.y));
-        const rd   = rowNearest(rowsD, rowY);
-        const num  = rd?.find(i => /^\d+(\.\d+)?$/.test(i.str));
-        const pct  = num !== undefined ? parseFloat(num.str) : 0;
-        if (pct >= 0 && pct <= 100) {
-            subEntries.push({ y: rowY, nombre: toTitleCase(sNom), porcentaje: pct });
-        }
-    }
-
-    // ── 7. Asignar subs a componentes por Y-midpoint extendido ──────
-    // Usamos 80% del gap hacia el siguiente componente (en vez de 50%)
-    // para compensar que el texto del componente aparece en el CENTRO
-    // de la celda combinada, mientras sus subs pueden estar más arriba.
-    compEntries.sort((a, b) => a.y - b.y);
-    const componentes = compEntries.map((ce, idx) => {
-        const prevY  = idx > 0 ? compEntries[idx - 1].y : -Infinity;
-        const nextY  = idx < compEntries.length - 1 ? compEntries[idx + 1].y : Infinity;
-        const yFrom  = prevY === -Infinity ? -Infinity : (prevY + ce.y) / 2;
-        const yTo    = nextY === Infinity  ? Infinity  : ce.y + (nextY - ce.y) * 0.8;
-        const key    = ce.name.replace(/\s+/g, '_');
-        return {
-            key,
-            label: toTitleCase(ce.name),
-            peso:  ce.peso,
-            color: COLORES_COMP_MAP[key.split('_')[0]] ?? COMP_COLORS[idx % COMP_COLORS.length],
-            subs:  subEntries.filter(s => s.y >= yFrom && s.y < yTo),
-        };
-    });
-
-    console.groupCollapsed('📄 PDF Parser — resultado final');
-    componentes.forEach(c => {
-        console.log(`[${c.peso}%] ${c.label}: ${c.subs.length} evaluaciones`);
-        c.subs.forEach(s => console.log(`   • ${s.nombre}: ${s.porcentaje}%`));
-    });
-    console.groupEnd();
-
-    return componentes.length ? componentes : extraerPorTextoPDF(items);
-}
-
-// Fallback: detección por texto cuando la posición no funciona
-function extraerPorTextoPDF(items) {
-    const COMPS  = ['EJERCICIO','CATEDRA','EXAMEN','LABORATORIO','TALLER','PROYECTO','INFORME','CONTROL'];
-    const reComp = new RegExp(`^(${COMPS.join('|')})(\\s+(\\d{1,3}))?$`, 'i');
-    const lineas = agruparFilasPDF(items, 6).map(r => r.map(i => i.str).join(' ')).filter(Boolean);
-    const componentes = [];
-    let cur = null, inPond = false;
-
-    for (const linea of lineas) {
-        if (/PONDERACIONES/i.test(linea)) { inPond = true; continue; }
-        if (!inPond) continue;
-        if (/7\.2|ESTRATEGIA|Nota Informativa/i.test(linea)) break;
-
-        const cm = linea.match(reComp);
-        if (cm && cm[3]) {
-            const name      = cm[1].toUpperCase();
-            const peso      = parseFloat(cm[3]);
-            // Evitar crear duplicado: p.ej. "EXAMEN 100" no debe crear nuevo componente si ya existe EXAMEN
-            const yaExiste  = componentes.some(c => c.key === name);
-            if (peso > 0 && peso <= 100 && !yaExiste) {
-                cur = {
-                    key: name, label: toTitleCase(name), peso,
-                    color: COLORES_COMP_MAP[name] ?? COMP_COLORS[componentes.length % COMP_COLORS.length],
-                    subs: [],
-                };
-                componentes.push(cur);
-                continue;
-            }
-            // Si ya existe, redirigir cur a ese componente para que los subs vayan bien
-            if (yaExiste) { cur = componentes.find(c => c.key === name); continue; }
-        }
-
-        if (cur) {
-            // Línea tipo "NOMBRE QUALIFIER 33.33" o "NOMBRE 100"
-            // El ÚLTIMO número de la línea es el porcentaje; el resto es el nombre
-            const sm = linea.match(/^(.+?)\s+([\d]+(?:\.\d+)?)$/);
-            if (sm) {
-                const pct = parseFloat(sm[2]);
-                if (pct >= 0 && pct <= 100)
-                    cur.subs.push({ nombre: toTitleCase(sm[1].trim()), porcentaje: pct });
-            }
-        }
-    }
-
-    console.groupCollapsed('📄 PDF Parser (fallback) — resultado');
-    componentes.forEach(c => {
-        console.log(`[${c.peso}%] ${c.label}:`);
-        c.subs.forEach(s => console.log(`   ${s.nombre}: ${s.porcentaje}%`));
-    });
-    console.groupEnd();
-
-    return componentes.length ? componentes : null;
-}
-
-$('#btnImportarPDF').addEventListener('click', () => {
-    $('#inputPDF').value = '';
-    $('#inputPDF').click();
-});
-
-$('#inputPDF').addEventListener('change', async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const btn = $('#btnImportarPDF');
-    const textoOriginal = btn.textContent;
-    btn.textContent = '⏳ Leyendo...';
-    btn.disabled = true;
-    try {
-        const datos = await parsearPDFUDLA(file);
-
-        // ── Verificar colisión con ramos existentes ───────────────────
-        const plantillas = await obtenerPlantillas();
-        const existente  = plantillas.find(
-            p => p.nombre.trim().toLowerCase() === datos.nombre.trim().toLowerCase()
-        );
-
-        let modoEdicion = false; // true = editar existente, false = crear nuevo
-        if (existente) {
-            const editarExistente = await confirmar(
-                '⚠️ Ramo ya existe',
-                `Ya existe un ramo llamado "${existente.nombre}".\n¿Deseas actualizar el existente con los datos del PDF, o crear uno nuevo?`,
-                'Actualizar existente',
-                false
-            );
-            modoEdicion = editarExistente;
-        }
-
-        closeModal('modalGestionRamos');
-        editorPlantilla = {
-            id:                modoEdicion ? existente.id : null,
-            nombre:            datos.nombre,
-            umbralEximen:      datos.umbralEximen,
-            examenObligatorio: datos.examenObligatorio,
-            componentes:       datos.componentes,
-        };
-        $('#tituloModalRamo').textContent   = modoEdicion ? '✏️ Actualizar desde PDF' : '📄 Revisar importación';
-        $('#inputNombreRamo').value          = datos.nombre;
-        $('#editUmbralEximen').value         = datos.umbralEximen;
-        $('#editExamenObligatorio').checked  = datos.examenObligatorio;
-        $('#editUmbralEximen').disabled      = datos.examenObligatorio;
-        renderEditorCompleto();
-        openModal('modalEditarRamo');
-        const total = datos.componentes.reduce((s, c) => s + c.subs.length, 0);
-        const sufijo = modoEdicion ? ' · editando existente' : ' · revisa antes de guardar';
-        toast(`✅ ${datos.componentes.length} componentes · ${total} evaluaciones${sufijo}`, 'success');
-    } catch (err) {
-        toast('❌ ' + err.message, 'error');
-    } finally {
-        btn.textContent = textoOriginal;
-        btn.disabled = false;
-    }
-});
-
-// ══════════════════════════════════════
 //  RESET
 // ══════════════════════════════════════
 function resetUI() {
     $('#notasSection').style.display = 'none';
     $('#emptyState').style.display   = '';
-    if (chartDistribucion) { chartDistribucion.destroy(); chartDistribucion = null; }
 }

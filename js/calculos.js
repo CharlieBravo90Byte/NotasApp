@@ -67,9 +67,7 @@ function calcularPromedioParcial(plantilla, notasAlumno) {
  */
 function determinarEximen(plantilla, notasAlumno, umbralFallback) {
     if (plantilla.examenObligatorio) return false;
-    const umbral = (plantilla.umbralEximen !== undefined && plantilla.umbralEximen !== null)
-        ? plantilla.umbralEximen
-        : (umbralFallback ?? 5.0);
+    const umbral = 5.5;
     const pp = calcularPromedioParcial(plantilla, notasAlumno);
     if (pp === null) return false;
     return pp >= umbral;
@@ -126,7 +124,7 @@ function calcularNotaFinal(plantilla, notasAlumno, umbralFallback) {
 }
 
 // ── Utilidades ──
-function redondear(valor, decimales = 1) {
+function redondear(valor, decimales = 2) {
     if (valor === null || valor === undefined || isNaN(valor)) return '—';
     return Math.round(valor * Math.pow(10, decimales)) / Math.pow(10, decimales);
 }
@@ -146,4 +144,73 @@ function validarPorcentajesSubs(subs) {
 function validarPesosComponentes(componentes) {
     const total = componentes.reduce((s, c) => s + (parseFloat(c.peso) || 0), 0);
     return Math.abs(total - 100) < 0.01;
+}
+
+/**
+ * Para una sub vacía específica, calcula la nota mínima necesaria en esa sub
+ * para que el promedio parcial alcance ≥ 5.5 (exención),
+ * asumiendo que TODAS las demás subs vacías obtendrán 5.5.
+ * @returns {number|null} nota mínima (puede estar fuera de [1,7]) o null si no aplica
+ */
+function calcularNotaParaEximirseEnSub(plantilla, notasAlumno, targetCompKey, targetSubNombre) {
+    const UMBRAL = 5.5;
+    if (plantilla.examenObligatorio) return null;
+    const parcialesComps = plantilla.componentes.filter(c => c.key !== 'EXAMEN');
+
+    let sumaFixed = 0, pesoFixed = 0, targetComp = null;
+
+    for (const comp of parcialesComps) {
+        if (comp.key !== targetCompKey) {
+            // Otros componentes: mejor caso posible (vacíos = 7.0)
+            // Así no penalizamos los ejercicios por un mal parcial de cátedra
+            let sumNotas = 0, sumPct = 0;
+            for (const sub of comp.subs) {
+                const reg = notasAlumno.find(n => n.compKey === comp.key && n.subNombre === sub.nombre && n.nota != null);
+                const nota = reg ? reg.nota : 7.0;
+                sumNotas += nota * (sub.porcentaje || 0);
+                sumPct   += sub.porcentaje || 0;
+            }
+            const promComp = sumPct > 0 ? sumNotas / sumPct : 5.5;
+            sumaFixed += promComp * comp.peso;
+            pesoFixed += comp.peso;
+        } else {
+            targetComp = comp;
+        }
+    }
+
+    if (!targetComp) return null;
+    const targetSub = targetComp.subs.find(s => s.nombre === targetSubNombre);
+    if (!targetSub || !targetSub.porcentaje) return null;
+
+    let sumSinX = 0, pctTotal = 0;
+    for (const sub of targetComp.subs) {
+        pctTotal += sub.porcentaje || 0;
+        if (sub.nombre === targetSubNombre) continue;
+        const reg = notasAlumno.find(n => n.compKey === targetComp.key && n.subNombre === sub.nombre && n.nota != null);
+        const nota = reg ? reg.nota : 7.0;  // mismo componente: también mejor caso posible
+        sumSinX += nota * (sub.porcentaje || 0);
+    }
+
+    const pesoTotal = pesoFixed + targetComp.peso;
+    // Despejar X de: 5.5 * pesoTotal = sumaFixed + ((sumSinX + X * pctX) / pctTotal) * targetComp.peso
+    return ((UMBRAL * pesoTotal - sumaFixed) * pctTotal / targetComp.peso - sumSinX) / targetSub.porcentaje;
+}
+
+/**
+ * Calcula la nota mínima que se necesita en el examen para que la nota final >= 4.0.
+ * Retorna: número (puede ser < 1, entre 1-7, o > 7), o null si no hay componente EXAMEN.
+ */
+function calcularNotaMinimaExamen(plantilla, notasAlumno) {
+    const compExamen = plantilla.componentes.find(c => c.key === 'EXAMEN');
+    if (!compExamen || compExamen.peso === 0) return null;
+
+    let sumaNoExamen = 0;
+    for (const comp of plantilla.componentes) {
+        if (comp.key === 'EXAMEN') continue;
+        const prom = calcularPromedioComponente(comp, notasAlumno);
+        sumaNoExamen += (prom || 0) * comp.peso;
+    }
+
+    // 4.0 = (sumaNoExamen + notaExamen * pesoExamen) / 100
+    return (400 - sumaNoExamen) / compExamen.peso;
 }

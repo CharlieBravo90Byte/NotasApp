@@ -7,8 +7,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
 
@@ -121,12 +119,6 @@
                     </div>
                 </div>
 
-                <div class="card glass card-chart">
-                    <div class="card-header"><h2>📊 Distribución</h2></div>
-                    <div class="chart-container">
-                        <canvas id="chartDistribucion"></canvas>
-                    </div>
-                </div>
             </div>
         </section>
     </main>
@@ -165,9 +157,7 @@
                 <div id="listaRamos" class="lista-ramos"></div>
                 <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
                     <button id="btnNuevaPlantilla" class="btn btn-accent">＋ Nuevo Ramo</button>
-                    <button id="btnImportarPDF" class="btn btn-ghost">📄 Importar desde PDF</button>
                 </div>
-                <input type="file" id="inputPDF" accept=".pdf" style="display:none">
             </div>
         </div>
     </div>
@@ -189,14 +179,8 @@
 
                 <div class="form-row-split">
                     <div class="control-group">
-                        <label for="editUmbralEximen">🎯 Umbral de exención</label>
-                        <select id="editUmbralEximen" class="input">
-                            <option value="4.0">4.0</option>
-                            <option value="4.5">4.5</option>
-                            <option value="5.0" selected>5.0</option>
-                            <option value="5.5">5.5</option>
-                            <option value="6.0">6.0</option>
-                        </select>
+                        <label>🎯 Umbral de exención</label>
+                        <div class="input input--readonly">≥ 5.5 <span style="opacity:0.5;font-size:0.78rem;">(fijo)</span></div>
                     </div>
                     <div class="control-group" style="align-self:center;padding-top:18px;">
                         <label class="toggle-label">

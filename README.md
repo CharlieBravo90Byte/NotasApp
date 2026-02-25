@@ -21,7 +21,6 @@ Calcula promedios, determina exención de examen y muestra gráficos — todo gu
   - Nota final ponderada según los pesos de la plantilla
   - Si el alumno puede eximirse del examen (umbral configurable por ramo)
   - Estado: **APROBADO / REPROBADO**
-- **Gráfico de barras** con la distribución de notas por componente.
 - **Exporta datos a JSON** para respaldo.
 - **Funciona 100% offline** — no necesita servidor ni internet.
 
@@ -90,6 +89,7 @@ El PDF usa **celdas combinadas (rowspan)**: el texto del componente aparece en e
 │          │          │  Catedra Recup.    │  33.33     │
 │ EJERCICIO│   20     │  Ejercicio 1       │   25       │
 └──────────┴──────────┴────────────────────┴────────────┘
+
 ```
 
 Después de importar, el editor permite **revisar y modificar** todo antes de guardar.
@@ -201,7 +201,6 @@ Uso interno / privado — SoftKMC.
   - Si te eximes del examen (según un umbral configurable)
   - Nota final ponderada (20% ejercicios, 50% cátedras, 30% examen)
   - Estado: APROBADO / REPROBADO
-- **Gráfico de barras** con la distribución de notas por componente.
 - **Exporta datos a JSON** para respaldo.
 - **Funciona 100% offline** — no necesita servidor ni internet.
 
