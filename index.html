@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NotasApp — Gestor de Notas Universitarias</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+<body>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-inner">
+            <div class="logo">
+                <span class="logo-icon">📊</span>
+                <div>
+                    <h1>NotasApp</h1>
+                    <p class="tagline">Gestión inteligente de notas universitarias</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button id="btnGestionarRamos" class="btn btn-ghost" title="Gestionar ramos/plantillas">
+                    📘 Ramos
+                </button>
+                <button id="btnExportarDatos" class="btn btn-ghost" title="Exportar datos del alumno">
+                    ⬇ Exportar
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="main">
+
+        <!-- Panel de control -->
+        <section class="control-panel glass">
+            <div class="control-row">
+
+                <div class="control-group">
+                    <label>👤 Alumno</label>
+                    <div class="input-with-btn">
+                        <select id="usuarioSelect" class="input">
+                            <option value="">Seleccionar alumno...</option>
+                        </select>
+                        <button id="btnNuevoUsuario" class="btn btn-accent btn-icon-only" title="Nuevo alumno">＋</button>
+                        <button id="btnEliminarUsuario" class="btn btn-danger-ghost btn-icon-only" title="Eliminar alumno" disabled>✕</button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>📘 Ramo</label>
+                    <div class="input-with-btn">
+                        <select id="plantillaSelect" class="input" disabled>
+                            <option value="">Seleccionar ramo...</option>
+                        </select>
+                    </div>
+                </div>
+
+
+
+            </div>
+        </section>
+
+        <!-- Empty state -->
+        <section id="emptyState" class="empty-state glass">
+            <div class="empty-icon">🎓</div>
+            <h2>¡Bienvenido a NotasApp!</h2>
+            <p>Primero crea los <strong>ramos</strong> (estructura), luego selecciona un <strong>alumno</strong> para ingresar sus notas.</p>
+            <div class="empty-steps">
+                <div class="step"><span class="step-num">1</span> Crea un ramo (botón "Ramos")</div>
+                <div class="step"><span class="step-num">2</span> Crea un alumno</div>
+                <div class="step"><span class="step-num">3</span> Selecciona alumno + ramo</div>
+            </div>
+        </section>
+
+        <!-- Sección de notas -->
+        <section id="notasSection" class="notas-section" style="display:none;">
+
+            <!-- Tabla de notas -->
+            <div class="card glass">
+                <div class="card-header">
+                    <h2>📝 Notas</h2>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <span id="ramoNombreBadge" class="badge badge-accent"></span>
+                        <span id="alumnoNombreBadge" class="badge" style="background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3)"></span>
+                    </div>
+                </div>
+                <div class="tabla-wrapper">
+                    <table class="tabla-notas">
+                        <thead>
+                            <tr>
+                                <th style="width:140px">Componente</th>
+                                <th>Evaluación</th>
+                                <th style="width:100px">% Sub</th>
+                                <th style="width:100px">Nota</th>
+                                <th style="width:100px">Nota Final</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaNotas"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Dashboard -->
+            <div class="dashboard-grid">
+                <div class="card glass">
+                    <div class="card-header"><h2>📈 Promedios</h2></div>
+                    <div id="statsListDynamic" class="stats-list"></div>
+                </div>
+
+                <div class="card glass card-resultado">
+                    <div class="card-header"><h2>🏆 Resultado Final</h2></div>
+                    <div class="resultado-display">
+                        <div id="notaFinalGrande" class="nota-grande">—</div>
+                        <div id="estadoNota" class="estado-badge">SIN DATOS</div>
+                    </div>
+                </div>
+
+                <div class="card glass card-chart">
+                    <div class="card-header"><h2>📊 Distribución</h2></div>
+                    <div class="chart-container">
+                        <canvas id="chartDistribucion"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ═══════════════════════════════════════════
+         MODAL: Nuevo alumno
+    ════════════════════════════════════════════ -->
+    <div id="modalUsuario" class="modal-overlay">
+        <div class="modal glass">
+            <div class="modal-header">
+                <h2>👤 Nuevo Alumno</h2>
+                <button class="modal-close" data-modal="modalUsuario">✕</button>
+            </div>
+            <div class="modal-body">
+                <label for="inputUsuario">Nombre del alumno</label>
+                <input type="text" id="inputUsuario" class="input" placeholder="Ej: Juan Pérez" autocomplete="off">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" data-modal="modalUsuario">Cancelar</button>
+                <button id="btnGuardarUsuario" class="btn btn-accent">Crear Alumno</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         MODAL: Gestionar Ramos (plantillas)
+    ════════════════════════════════════════════ -->
+    <div id="modalGestionRamos" class="modal-overlay">
+        <div class="modal modal-xl glass">
+            <div class="modal-header">
+                <h2>📘 Gestión de Ramos</h2>
+                <button class="modal-close" data-modal="modalGestionRamos">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- Lista de ramos existentes -->
+                <div id="listaRamos" class="lista-ramos"></div>
+                <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+                    <button id="btnNuevaPlantilla" class="btn btn-accent">＋ Nuevo Ramo</button>
+                    <button id="btnImportarPDF" class="btn btn-ghost">📄 Importar desde PDF</button>
+                </div>
+                <input type="file" id="inputPDF" accept=".pdf" style="display:none">
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         MODAL: Crear / Editar plantilla de ramo
+    ════════════════════════════════════════════ -->
+    <div id="modalEditarRamo" class="modal-overlay">
+        <div class="modal modal-xl glass">
+            <div class="modal-header">
+                <h2 id="tituloModalRamo">📘 Nuevo Ramo</h2>
+                <button class="modal-close" data-modal="modalEditarRamo">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <label>Nombre del ramo</label>
+                    <input type="text" id="inputNombreRamo" class="input" placeholder="Ej: Física I">
+                </div>
+
+                <div class="form-row-split">
+                    <div class="control-group">
+                        <label for="editUmbralEximen">🎯 Umbral de exención</label>
+                        <select id="editUmbralEximen" class="input">
+                            <option value="4.0">4.0</option>
+                            <option value="4.5">4.5</option>
+                            <option value="5.0" selected>5.0</option>
+                            <option value="5.5">5.5</option>
+                            <option value="6.0">6.0</option>
+                        </select>
+                    </div>
+                    <div class="control-group" style="align-self:center;padding-top:18px;">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="editExamenObligatorio">
+                            <span>Examen siempre obligatorio (sin exención)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="plantilla-editor" id="plantillaEditor">
+                    <!-- Se genera dinámicamente -->
+                </div>
+
+                <div class="pesos-total" id="pesosCompTotal">
+                    Pesos totales: <strong id="pesosCompTotalVal">0</strong>%
+                    <span id="pesosCompOk"    class="badge badge-success" style="display:none;">✓ OK</span>
+                    <span id="pesosCompError" class="badge badge-error">⚠ deben sumar 100%</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" data-modal="modalEditarRamo">Cancelar</button>
+                <button id="btnGuardarPlantilla" class="btn btn-accent">Guardar Ramo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         MODAL: Confirmar
+    ════════════════════════════════════════════ -->
+    <div id="modalConfirm" class="modal-overlay">
+        <div class="modal glass modal-sm">
+            <div class="modal-header">
+                <h2 id="confirmTitle">¿Estás seguro?</h2>
+            </div>
+            <div class="modal-body">
+                <p id="confirmMessage">Esta acción no se puede deshacer.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" data-modal="modalConfirm">Cancelar</button>
+                <button id="btnConfirmOk" class="btn btn-danger">Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/db.js"></script>
+    <script src="js/calculos.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

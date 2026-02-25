@@ -1,0 +1,59 @@
+# Dependencias
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+.env.local
+.env.*.local
+
+# IDEs y editores
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+.cache/
+
+# Archivos de compilación
+dist/
+build/
+out/
+
+# Logs
+logs/
+*.log
+
+# Archivos temporales
+*.tmp
+.temp/
+temp/
+
+# Archivos del navegador
+.cache-loader/
+.eslintcache
+
+# Respaldos
+*.bak
+*.backup
+*~
+
+# Node-RED
+.node-red/
+
+# WebStorm
+.idea/
+
+# Otros
+.vscode-settings.json
+settings.json
