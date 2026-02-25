@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════
-   NotasApp — Modern Dark UI
+   NotasApp — Light UI · Blanco + Naranja
    ══════════════════════════════════════════════════ */
 
 /* --- Variables --- */
@@ -216,9 +216,15 @@ body::before {
     border: 1px solid transparent;
 }
 
-.btn-danger-ghost:hover {
+.btn-danger-ghost:not(:disabled) {
+    color: var(--danger);
+    border-color: rgba(220, 38, 38, 0.20);
+}
+
+.btn-danger-ghost:hover:not(:disabled) {
     color: var(--danger);
     background: var(--danger-bg);
+    border-color: rgba(220, 38, 38, 0.35);
 }
 
 .btn-icon-only {
@@ -233,7 +239,7 @@ body::before {
 .input {
     width: 100%;
     padding: 10px 14px;
-    background: var(--bg-primary);
+    background: #ffffff;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     color: var(--text-primary);
@@ -1111,9 +1117,19 @@ select.input {
 }
 
 .input-sm {
-    width: 70px !important;
     padding: 6px 8px !important;
     font-size: 0.88rem !important;
+}
+
+/* Campo de nombre de sub-evaluación: ocupa todo el espacio disponible */
+.sub-nombre.input-sm {
+    width: 100% !important;
+    text-align: left;
+}
+
+/* Campo de porcentaje: ancho fijo */
+.input-pct {
+    width: 72px !important;
     text-align: center;
 }
 

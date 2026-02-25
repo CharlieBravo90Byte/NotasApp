@@ -384,9 +384,9 @@ function renderComponenteEditor(container, comp, ci) {
 function renderSubRow(ci, si, sub) {
     return `
         <div class="sub-row">
-            <input type="text" class="input input-sm sub-nombre" value="${sub.nombre}" placeholder="Nombre">
+            <input type="text" class="input input-sm sub-nombre" value="${sub.nombre}" placeholder="Nombre evaluación">
             <div class="peso-input-wrap">
-                <input type="number" class="input input-sm sub-pct"
+                <input type="number" class="input input-sm input-pct sub-pct"
                     value="${sub.porcentaje}" min="0" max="100" step="0.01" placeholder="%">
                 <span>%</span>
             </div>
@@ -811,14 +811,25 @@ async function parsearPDFUDLA(file) {
     if (!pondItems)
         throw new Error('No se encontró la sección PONDERACIONES. ¿Es un programa de asignatura UDLA?');
 
-    const siglaM  = fullText.match(/Sigla\s+([A-Z]{2,5}\d{3,4})/);
-    const nombreM = fullText.match(/Nombre\s+([\wáéíóúÁÉÍÓÚñÑ\s,\-\/\.]+?)(?:\n|Crédito|Vigencia)/i);
+    const siglaM  = fullText.match(/Sigla\s*:?\s*([A-Z]{2,5}\d{3,4})/i)
+                 || fullText.match(/\b([A-Z]{2,4}\d{3,4})\b/);
+    const nombreM = fullText.match(/Nombre\s*:?\s*([\wáéíóúÁÉÍÓÚñÑ\s,\-\/\.]+?)(?=\s*(?:Crédito|Credito|Vigencia|Jornada|Modalidad|Sigla))/i);
     const sigla   = siglaM?.[1] ?? '';
     const nombre  = (nombreM?.[1] ?? '').trim().replace(/\s+/g, ' ');
 
-    const umbralM = fullText.match(/(\d[,\.]\d)\s+o\s+superior[^\n]{0,80}exim/i)
-                 || fullText.match(/exim[^\n]{0,80}(\d[,\.]\d)/i);
-    const umbral  = umbralM ? parseFloat(umbralM[1].replace(',', '.')) : 5.0;
+    // ── Exención de examen ─────────────────────────────────────────────────
+    // Busca la sección "EXIMICIÓN DE EXAMEN"; si no existe → examen obligatorio
+    const eximIdx = fullText.search(/EXIMICI[OÓ]N\s+DE\s+EXAMEN/i);
+    let umbral    = 5.0;
+    let examenObl = false;
+    if (eximIdx < 0) {
+        examenObl = true;   // no hay condición de exención declarada
+    } else {
+        const eximSlice = fullText.slice(eximIdx, eximIdx + 800);
+        // Captura número decimal tipo "5,5" o "5.0" (primer número que aparezca)
+        const numM = eximSlice.match(/\b(\d)[,\.](\d{1,2})\b/);
+        umbral     = numM ? parseFloat(`${numM[1]}.${numM[2]}`) : 5.0;
+    }
 
     const componentes = extraerComponentesPDF(pondItems);
     if (!componentes?.length)
@@ -827,88 +838,182 @@ async function parsearPDFUDLA(file) {
     return {
         nombre:            sigla ? `${sigla} — ${nombre}` : nombre || file.name.replace(/\.pdf$/i, ''),
         umbralEximen:      umbral,
-        examenObligatorio: false,
+        examenObligatorio: examenObl,
         componentes,
     };
 }
 
 function extraerComponentesPDF(items) {
-    const rows = agruparFilasPDF(items, 6);
+    // ══════════════════════════════════════════════════════════════════
+    // Estrategia: clasificar ítems en 4 COLUMNAS exactas usando las
+    // posiciones X del encabezado, luego emparejar por proximidad Y.
+    // Esto resuelve el problema de celdas combinadas (rowspan) del PDF
+    // donde el texto del componente aparece en el CENTRO vertical de
+    // su celda, mientras los subcomponentes están arriba y abajo.
+    // ══════════════════════════════════════════════════════════════════
 
-    const hIdx = rows.findIndex(row =>
-        row.some(i => /^componente$/i.test(i.str)) &&
-        row.some(i => /^subcomponente$/i.test(i.str))
-    );
-    if (hIdx < 0) return extraerPorTextoPDF(items);
+    // ── 1. Localizar encabezado ──────────────────────────────────────
+    const allRows = agruparFilasPDF(items, 12);
+    let xComp = null, xSub = null, xPctComp = null, xPctSub = null, headerY = -1;
 
-    const hRow  = rows[hIdx];
-    const hComp = hRow.find(i => /^componente$/i.test(i.str));
-    const hSub  = hRow.find(i => /^subcomponente$/i.test(i.str));
-    const xComp = hComp?.x ?? 220;
-    const xSub  = hSub?.x  ?? 360;
+    outerH: for (let i = 0; i < allRows.length; i++) {
+        for (let span = 1; span <= 4 && i + span - 1 < allRows.length; span++) {
+            const win      = allRows.slice(i, i + span).flat();
+            const compItem = win.find(w => /^componente$/i.test(w.str));
+            const subItem  = win.find(w => /^subcomponente$/i.test(w.str));
+            if (!compItem || !subItem || subItem.x <= compItem.x) continue;
 
-    const componentes = [];
-    let cur = null;
+            xComp = compItem.x;
+            xSub  = subItem.x;
 
-    for (let ri = hIdx + 1; ri < rows.length; ri++) {
-        const row = rows[ri];
-        const txt = row.map(i => i.str).join(' ');
-        if (/Nota Informativa|7\.2|ESTRATEGIA|Publicado/i.test(txt)) break;
-        if (/Modalidad|Ponderaci|Resultado|Procedimiento/i.test(txt)) continue;
+            // % Componente: busca "%" entre xComp y xSub en el header
+            const pctMid = win.filter(w => /^%/.test(w.str) && w.x > compItem.x && w.x < subItem.x);
+            xPctComp = pctMid.length
+                ? Math.min(...pctMid.map(w => w.x))
+                : Math.round(xComp + (xSub - xComp) * 0.6);
 
-        const compZone = row.filter(i => i.x >= xComp - 40 && i.x < xSub - 15);
-        const subZone  = row.filter(i => i.x >= xSub - 15);
+            // % Subcomponente: busca "%" a la derecha de xSub
+            const pctRight = win.filter(w => /^%/.test(w.str) && w.x > subItem.x);
+            xPctSub = pctRight.length
+                ? Math.min(...pctRight.map(w => w.x))
+                : xSub + Math.round((xSub - xComp) * 0.7);
 
-        const cNames  = compZone.filter(i => /^[A-ZÁÉÍÓÚÑ\/]{2,}$/.test(i.str));
-        const cWeight = compZone.find(i => /^\d{1,3}(\.\d+)?$/.test(i.str));
-        if (cNames.length && cWeight) {
-            const name = cNames.map(i => i.str).join(' ');
-            const peso = parseFloat(cWeight.str);
-            if (peso > 0 && peso <= 100) {
-                const key = name.replace(/\s+/g, '_');
-                cur = {
-                    key, label: toTitleCase(name), peso,
-                    color: COLORES_COMP_MAP[key.split('_')[0]] ?? COMP_COLORS[componentes.length % COMP_COLORS.length],
-                    subs: [],
-                };
-                componentes.push(cur);
-            }
-        }
-
-        if (cur && subZone.length >= 2) {
-            const nums  = subZone.filter(i => /^\d+(\.\d+)?$/.test(i.str));
-            const names = subZone.filter(i => !/^\d+(\.\d+)?$/.test(i.str));
-            const sNom  = names.map(i => i.str).join(' ').trim();
-            const pct   = nums.length ? parseFloat(nums.at(-1).str) : 0;
-            if (sNom && sNom.length > 1)
-                cur.subs.push({ nombre: toTitleCase(sNom), porcentaje: pct });
+            headerY = Math.max(...win.map(w => w.y));
+            break outerH;
         }
     }
+    if (xComp === null) return extraerPorTextoPDF(items);
+
+    console.log(`📄 Columnas detectadas: xComp=${xComp} xPctComp=${xPctComp} xSub=${xSub} xPctSub=${xPctSub}`);
+
+    // ── 2. Ítems válidos bajo el header ─────────────────────────────
+    const STOP_RE = /7\.2|ESTRATEGIA|Nota\s*Informativa|Publicado|Metodolog/i;
+    const SKIP_RE = /^Modalidad$|^Jornada$|^Ponderaci|^%|^TODOS$/i;
+
+    const dataAll = items.filter(i => i.str.trim() && i.y > headerY + 2);
+    let yStop = Infinity;
+    for (const it of dataAll) {
+        if (STOP_RE.test(it.str)) { yStop = Math.min(yStop, it.y); }
+    }
+    const valid = dataAll.filter(i => i.y < yStop && !SKIP_RE.test(i.str));
+
+    // ── 3. Clasificar en 4 columnas por X ───────────────────────────
+    // ┌─────────┬──────────┬──────────────────┬────────────┐
+    // │  Col A  │  Col B   │      Col C       │   Col D    │
+    // │ Comp.   │ % Comp.  │  Subcomponente   │ % Subcomp. │
+    // │ nombre  │ (35,45…) │ (Cat. 1, Ej. 2…) │ (33.33, …) │
+    // └─────────┴──────────┴──────────────────┴────────────┘
+    const mg = 25; // margen de tolerancia en X
+    const colA = valid.filter(i => i.x >= xComp    - mg && i.x < xPctComp);
+    const colB = valid.filter(i => i.x >= xPctComp      && i.x < xSub - 5);
+    const colC = valid.filter(i => i.x >= xSub     - mg && i.x < xPctSub - 5);
+    const colD = valid.filter(i => i.x >= xPctSub  - 5);
+
+    // ── 4. Agrupar cada columna por Y (tolerancia 13) ───────────────
+    const rowsA = agruparFilasPDF(colA, 13);
+    const rowsB = agruparFilasPDF(colB, 13);
+    const rowsC = agruparFilasPDF(colC, 13);
+    const rowsD = agruparFilasPDF(colD, 13);
+
+    // Helper: fila más cercana en Y dentro de maxDist píxeles
+    const rowNearest = (rows, y, maxDist = 20) =>
+        rows.find(r => Math.abs(Math.min(...r.map(i => i.y)) - y) <= maxDist);
+
+    // ── 5. PASADA 1 — Componentes (colA nombre + colB peso) ─────────
+    const compEntries = [];
+    for (const ra of rowsA) {
+        const words = ra.filter(i => /^[A-ZÁÉÍÓÚÑ\/]{3,}$/.test(i.str));
+        if (!words.length) continue;
+        const name = words.map(i => i.str).join(' ');
+        const rowY = Math.min(...ra.map(i => i.y));
+        const rb   = rowNearest(rowsB, rowY);
+        const num  = rb?.find(i => /^\d{1,3}(\.\d+)?$/.test(i.str));
+        const peso = num ? parseFloat(num.str) : null;
+        if (peso !== null && peso > 0 && peso <= 100 && !compEntries.some(c => c.name === name)) {
+            compEntries.push({ name, peso, y: rowY });
+        }
+    }
+    if (!compEntries.length) return extraerPorTextoPDF(items);
+
+    // ── 6. PASADA 2 — Subcomponentes (colC nombre + colD %) ─────────
+    const subEntries = [];
+    for (const rc of rowsC) {
+        const sNom = rc.map(i => i.str).join(' ').trim();
+        if (!sNom) continue;
+        const rowY = Math.min(...rc.map(i => i.y));
+        const rd   = rowNearest(rowsD, rowY);
+        const num  = rd?.find(i => /^\d+(\.\d+)?$/.test(i.str));
+        const pct  = num !== undefined ? parseFloat(num.str) : 0;
+        if (pct >= 0 && pct <= 100) {
+            subEntries.push({ y: rowY, nombre: toTitleCase(sNom), porcentaje: pct });
+        }
+    }
+
+    // ── 7. Asignar subs a componentes por Y-midpoint extendido ──────
+    // Usamos 80% del gap hacia el siguiente componente (en vez de 50%)
+    // para compensar que el texto del componente aparece en el CENTRO
+    // de la celda combinada, mientras sus subs pueden estar más arriba.
+    compEntries.sort((a, b) => a.y - b.y);
+    const componentes = compEntries.map((ce, idx) => {
+        const prevY  = idx > 0 ? compEntries[idx - 1].y : -Infinity;
+        const nextY  = idx < compEntries.length - 1 ? compEntries[idx + 1].y : Infinity;
+        const yFrom  = prevY === -Infinity ? -Infinity : (prevY + ce.y) / 2;
+        const yTo    = nextY === Infinity  ? Infinity  : ce.y + (nextY - ce.y) * 0.8;
+        const key    = ce.name.replace(/\s+/g, '_');
+        return {
+            key,
+            label: toTitleCase(ce.name),
+            peso:  ce.peso,
+            color: COLORES_COMP_MAP[key.split('_')[0]] ?? COMP_COLORS[idx % COMP_COLORS.length],
+            subs:  subEntries.filter(s => s.y >= yFrom && s.y < yTo),
+        };
+    });
+
+    console.groupCollapsed('📄 PDF Parser — resultado final');
+    componentes.forEach(c => {
+        console.log(`[${c.peso}%] ${c.label}: ${c.subs.length} evaluaciones`);
+        c.subs.forEach(s => console.log(`   • ${s.nombre}: ${s.porcentaje}%`));
+    });
+    console.groupEnd();
+
     return componentes.length ? componentes : extraerPorTextoPDF(items);
 }
 
 // Fallback: detección por texto cuando la posición no funciona
 function extraerPorTextoPDF(items) {
-    const COMPS = ['EJERCICIO','CATEDRA','EXAMEN','LABORATORIO','TALLER','PROYECTO','INFORME','CONTROL'];
+    const COMPS  = ['EJERCICIO','CATEDRA','EXAMEN','LABORATORIO','TALLER','PROYECTO','INFORME','CONTROL'];
     const reComp = new RegExp(`^(${COMPS.join('|')})(\\s+(\\d{1,3}))?$`, 'i');
     const lineas = agruparFilasPDF(items, 6).map(r => r.map(i => i.str).join(' ')).filter(Boolean);
     const componentes = [];
     let cur = null, inPond = false;
+
     for (const linea of lineas) {
         if (/PONDERACIONES/i.test(linea)) { inPond = true; continue; }
         if (!inPond) continue;
         if (/7\.2|ESTRATEGIA|Nota Informativa/i.test(linea)) break;
+
         const cm = linea.match(reComp);
         if (cm && cm[3]) {
-            const name = cm[1].toUpperCase(), peso = parseFloat(cm[3]);
-            if (peso > 0 && peso <= 100) {
-                cur = { key: name, label: toTitleCase(name), peso,
+            const name      = cm[1].toUpperCase();
+            const peso      = parseFloat(cm[3]);
+            // Evitar crear duplicado: p.ej. "EXAMEN 100" no debe crear nuevo componente si ya existe EXAMEN
+            const yaExiste  = componentes.some(c => c.key === name);
+            if (peso > 0 && peso <= 100 && !yaExiste) {
+                cur = {
+                    key: name, label: toTitleCase(name), peso,
                     color: COLORES_COMP_MAP[name] ?? COMP_COLORS[componentes.length % COMP_COLORS.length],
-                    subs: [] };
-                componentes.push(cur); continue;
+                    subs: [],
+                };
+                componentes.push(cur);
+                continue;
             }
+            // Si ya existe, redirigir cur a ese componente para que los subs vayan bien
+            if (yaExiste) { cur = componentes.find(c => c.key === name); continue; }
         }
+
         if (cur) {
+            // Línea tipo "NOMBRE QUALIFIER 33.33" o "NOMBRE 100"
+            // El ÚLTIMO número de la línea es el porcentaje; el resto es el nombre
             const sm = linea.match(/^(.+?)\s+([\d]+(?:\.\d+)?)$/);
             if (sm) {
                 const pct = parseFloat(sm[2]);
@@ -917,6 +1022,14 @@ function extraerPorTextoPDF(items) {
             }
         }
     }
+
+    console.groupCollapsed('📄 PDF Parser (fallback) — resultado');
+    componentes.forEach(c => {
+        console.log(`[${c.peso}%] ${c.label}:`);
+        c.subs.forEach(s => console.log(`   ${s.nombre}: ${s.porcentaje}%`));
+    });
+    console.groupEnd();
+
     return componentes.length ? componentes : null;
 }
 
@@ -934,15 +1047,33 @@ $('#inputPDF').addEventListener('change', async (e) => {
     btn.disabled = true;
     try {
         const datos = await parsearPDFUDLA(file);
+
+        // ── Verificar colisión con ramos existentes ───────────────────
+        const plantillas = await obtenerPlantillas();
+        const existente  = plantillas.find(
+            p => p.nombre.trim().toLowerCase() === datos.nombre.trim().toLowerCase()
+        );
+
+        let modoEdicion = false; // true = editar existente, false = crear nuevo
+        if (existente) {
+            const editarExistente = await confirmar(
+                '⚠️ Ramo ya existe',
+                `Ya existe un ramo llamado "${existente.nombre}".\n¿Deseas actualizar el existente con los datos del PDF, o crear uno nuevo?`,
+                'Actualizar existente',
+                false
+            );
+            modoEdicion = editarExistente;
+        }
+
         closeModal('modalGestionRamos');
         editorPlantilla = {
-            id: null,
+            id:                modoEdicion ? existente.id : null,
             nombre:            datos.nombre,
             umbralEximen:      datos.umbralEximen,
             examenObligatorio: datos.examenObligatorio,
             componentes:       datos.componentes,
         };
-        $('#tituloModalRamo').textContent   = '📄 Revisar importación';
+        $('#tituloModalRamo').textContent   = modoEdicion ? '✏️ Actualizar desde PDF' : '📄 Revisar importación';
         $('#inputNombreRamo').value          = datos.nombre;
         $('#editUmbralEximen').value         = datos.umbralEximen;
         $('#editExamenObligatorio').checked  = datos.examenObligatorio;
@@ -950,7 +1081,8 @@ $('#inputPDF').addEventListener('change', async (e) => {
         renderEditorCompleto();
         openModal('modalEditarRamo');
         const total = datos.componentes.reduce((s, c) => s + c.subs.length, 0);
-        toast(`✅ ${datos.componentes.length} componentes · ${total} evaluaciones · umbral ${datos.umbralEximen}`, 'success');
+        const sufijo = modoEdicion ? ' · editando existente' : ' · revisa antes de guardar';
+        toast(`✅ ${datos.componentes.length} componentes · ${total} evaluaciones${sufijo}`, 'success');
     } catch (err) {
         toast('❌ ' + err.message, 'error');
     } finally {
