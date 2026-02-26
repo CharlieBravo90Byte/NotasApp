@@ -18,21 +18,38 @@
  * @returns {number|null}
  */
 function calcularPromedioComponente(comp, notasAlumno) {
+    const NP_VALUE = 0;
+    // Detectar recuperativa (porcentaje original = 0, nombre contiene 'recuperat')
+    const recuperativa = comp.subs.find(s => /recuperat/i.test(s.nombre) && (s.porcentaje === 0));
+    // Calcular porcentaje extra que se transfiere a recuperativa por N/P
+    let pctReasignado = 0;
+    if (recuperativa) {
+        for (const sub of comp.subs) {
+            if (sub === recuperativa) continue;
+            const reg = notasAlumno.find(n => n.compKey === comp.key && n.subNombre === sub.nombre);
+            if (reg && reg.nota === NP_VALUE) pctReasignado += (sub.porcentaje || 0);
+        }
+    }
+
     const subsConNota = comp.subs.map(sub => {
-        const reg = notasAlumno.find(
-            n => n.compKey === comp.key && n.subNombre === sub.nombre && n.nota !== null && n.nota !== undefined
-        );
-        return { sub, nota: reg ? reg.nota : null };
-    }).filter(x => x.nota !== null);
+        if (sub === recuperativa && pctReasignado > 0) {
+            // Recuperativa activa: usar su porcentaje reasignado
+            const reg = notasAlumno.find(n => n.compKey === comp.key && n.subNombre === sub.nombre && n.nota != null && n.nota !== NP_VALUE);
+            return reg ? { porcentaje: pctReasignado, nota: reg.nota } : null;
+        }
+        const reg = notasAlumno.find(n => n.compKey === comp.key && n.subNombre === sub.nombre && n.nota != null && n.nota !== NP_VALUE);
+        // Ignorar subs marcadas N/P
+        const esNP = notasAlumno.find(n => n.compKey === comp.key && n.subNombre === sub.nombre && n.nota === NP_VALUE);
+        if (esNP) return null;
+        return reg ? { porcentaje: sub.porcentaje || 0, nota: reg.nota } : null;
+    }).filter(x => x !== null && x.nota !== null);
 
     if (subsConNota.length === 0) return null;
 
-    // Si los porcentajes están definidos y > 0, usar ponderación
-    const pesoTotal = subsConNota.reduce((s, x) => s + (x.sub.porcentaje || 0), 0);
+    const pesoTotal = subsConNota.reduce((s, x) => s + x.porcentaje, 0);
     if (pesoTotal > 0) {
-        return subsConNota.reduce((s, x) => s + x.nota * (x.sub.porcentaje || 0), 0) / pesoTotal;
+        return subsConNota.reduce((s, x) => s + x.nota * x.porcentaje, 0) / pesoTotal;
     }
-    // Fallback: promedio simple
     return subsConNota.reduce((s, x) => s + x.nota, 0) / subsConNota.length;
 }
 
@@ -62,12 +79,27 @@ function calcularPromedioParcial(plantilla, notasAlumno) {
 
 /**
  * Determina si el alumno se exime del examen.
- * Prioridad: plantilla.umbralEximen > umbralFallback (global) > 5.0
- * Si plantilla.examenObligatorio === true, nunca se exime.
+ * Solo se exime si:
+ * - No es examen obligatorio
+ * - TODOS los componentes parciales (no EXAMEN) que tienen subs con porcentaje > 0
+ *   tienen al menos una nota registrada
+ * - El promedio parcial >= 5.5
  */
 function determinarEximen(plantilla, notasAlumno, umbralFallback) {
     if (plantilla.examenObligatorio) return false;
     const umbral = 5.5;
+    const parcialesComps = plantilla.componentes.filter(c => c.key !== 'EXAMEN');
+
+    // Verificar que todos los componentes parciales con subs ponderadas tengan al menos una nota
+    for (const comp of parcialesComps) {
+        const subsConPeso = comp.subs.filter(s => (s.porcentaje || 0) > 0);
+        if (subsConPeso.length === 0) continue; // componente sin subs ponderadas, ignorar
+        const tieneAlgunaNota = subsConPeso.some(sub =>
+            notasAlumno.find(n => n.compKey === comp.key && n.subNombre === sub.nombre && n.nota != null)
+        );
+        if (!tieneAlgunaNota) return false; // falta al menos un componente completo
+    }
+
     const pp = calcularPromedioParcial(plantilla, notasAlumno);
     if (pp === null) return false;
     return pp >= umbral;
@@ -161,16 +193,16 @@ function calcularNotaParaEximirseEnSub(plantilla, notasAlumno, targetCompKey, ta
 
     for (const comp of parcialesComps) {
         if (comp.key !== targetCompKey) {
-            // Otros componentes: mejor caso posible (vacíos = 7.0)
-            // Así no penalizamos los ejercicios por un mal parcial de cátedra
+            // Otros componentes: vacíos = 5.5 (umbral objetivo, mismo criterio que Excel)
             let sumNotas = 0, sumPct = 0;
             for (const sub of comp.subs) {
-                const reg = notasAlumno.find(n => n.compKey === comp.key && n.subNombre === sub.nombre && n.nota != null);
-                const nota = reg ? reg.nota : 7.0;
-                sumNotas += nota * (sub.porcentaje || 0);
-                sumPct   += sub.porcentaje || 0;
+                if ((sub.porcentaje || 0) === 0) continue; // ignorar subs sin peso (Diagnóstico, Recuperativa)
+                const reg = notasAlumno.find(n => n.compKey === comp.key && n.subNombre === sub.nombre && n.nota != null && n.nota !== 0);
+                const nota = reg ? reg.nota : UMBRAL;
+                sumNotas += nota * sub.porcentaje;
+                sumPct   += sub.porcentaje;
             }
-            const promComp = sumPct > 0 ? sumNotas / sumPct : 5.5;
+            const promComp = sumPct > 0 ? sumNotas / sumPct : UMBRAL;
             sumaFixed += promComp * comp.peso;
             pesoFixed += comp.peso;
         } else {
@@ -184,15 +216,17 @@ function calcularNotaParaEximirseEnSub(plantilla, notasAlumno, targetCompKey, ta
 
     let sumSinX = 0, pctTotal = 0;
     for (const sub of targetComp.subs) {
-        pctTotal += sub.porcentaje || 0;
+        if ((sub.porcentaje || 0) === 0) continue; // ignorar subs sin peso
+        pctTotal += sub.porcentaje;
         if (sub.nombre === targetSubNombre) continue;
-        const reg = notasAlumno.find(n => n.compKey === targetComp.key && n.subNombre === sub.nombre && n.nota != null);
-        const nota = reg ? reg.nota : 7.0;  // mismo componente: también mejor caso posible
-        sumSinX += nota * (sub.porcentaje || 0);
+        // Mismo componente: vacíos también = 5.5
+        const reg = notasAlumno.find(n => n.compKey === targetComp.key && n.subNombre === sub.nombre && n.nota != null && n.nota !== 0);
+        const nota = reg ? reg.nota : UMBRAL;
+        sumSinX += nota * sub.porcentaje;
     }
 
     const pesoTotal = pesoFixed + targetComp.peso;
-    // Despejar X de: 5.5 * pesoTotal = sumaFixed + ((sumSinX + X * pctX) / pctTotal) * targetComp.peso
+    // Despejar X de: UMBRAL * pesoTotal = sumaFixed + ((sumSinX + X * pct_X) / pctTotal) * pesoComp
     return ((UMBRAL * pesoTotal - sumaFixed) * pctTotal / targetComp.peso - sumSinX) / targetSub.porcentaje;
 }
 

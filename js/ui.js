@@ -206,6 +206,8 @@ $('#btnNuevaPlantilla').addEventListener('click', () => {
 //  EDITOR DE PLANTILLA
 // ══════════════════════════════════════
 
+const NP_VALUE = 0; // valor especial para N/P (no presentado)
+
 // Colores fijos por clave de componente conocida
 const KEY_COLORS = {
     EJERCICIO:    '#16a34a',  // verde
@@ -504,23 +506,35 @@ function renderizarTabla(plantilla, notasAlumno) {
 
     for (const comp of plantilla.componentes) {
         const promComp = calcularPromedioComponente(comp, notasAlumno);
-
-        // Fila cabecera del componente (celda que abarca filas de subs + total)
-        // Se construye con rowspan dinámico: subs + 1 (fila total)
         const rowspan = comp.subs.length + 1;
+
+        // Detectar subs N/P para reasignar porcentaje a recuperativa
+        const recuperativa = comp.subs.find(s =>
+            /recuperat/i.test(s.nombre) && (s.porcentaje === 0)
+        );
+        let pctReasignado = 0;
+        if (recuperativa) {
+            for (const sub of comp.subs) {
+                if (sub === recuperativa) continue;
+                const reg = notasAlumno.find(n => n.compKey === comp.key && n.subNombre === sub.nombre);
+                if (reg && reg.nota === NP_VALUE) pctReasignado += (sub.porcentaje || 0);
+            }
+        }
 
         comp.subs.forEach((sub, si) => {
             const notaReg  = notasAlumno.find(n => n.compKey === comp.key && n.subNombre === sub.nombre);
-            const notaVal  = notaReg ? notaReg.nota : null;
-            const pct      = sub.porcentaje;
-            // Nota ponderada de esta sub dentro del componente (contribución al promedio comp)
+            const esNP     = notaReg && notaReg.nota === NP_VALUE;
+            const notaVal  = (notaReg && !esNP) ? notaReg.nota : null;
+            // Porcentaje efectivo: si es la recuperativa, sumar el reasignado
+            const esRecup  = sub === recuperativa;
+            const pct      = esRecup ? (sub.porcentaje + pctReasignado) : (sub.porcentaje || 0);
             const contrib  = (notaVal !== null && pct > 0) ? redondear(notaVal * (pct / 100)) : '—';
 
             const tr = document.createElement('tr');
             tr.className = si === 0 ? 'primera-sub' : '';
+            if (esNP) tr.classList.add('fila-np');
 
             if (si === 0) {
-                // Primera fila del componente: agregar celda cabecera con rowspan
                 const tdComp = document.createElement('td');
                 tdComp.rowSpan = rowspan;
                 tdComp.className = 'td-componente';
@@ -538,43 +552,72 @@ function renderizarTabla(plantilla, notasAlumno) {
             tdSub.textContent = sub.nombre;
             tr.appendChild(tdSub);
 
-            // % parcial
+            // % parcial (dinámico si es recuperativa)
             const tdPct = document.createElement('td');
-            tdPct.className = 'td-center';
+            tdPct.className = 'td-center pct-cell';
+            tdPct.dataset.compKey   = comp.key;
+            tdPct.dataset.subNombre = sub.nombre;
             tdPct.textContent = pct > 0 ? pct + '%' : '—';
             tr.appendChild(tdPct);
 
-            // Input nota
+            // Celda de nota: input + checkbox N/P
             const tdNota = document.createElement('td');
-            const inp = document.createElement('input');
-            inp.type = 'number'; inp.min = '1'; inp.max = '7'; inp.step = '0.1';
-            inp.className = 'input-nota';
-            inp.placeholder = '—';
-            if (notaVal !== null) inp.value = notaVal;
-            inp.dataset.compKey   = comp.key;
-            inp.dataset.subNombre = sub.nombre;
-            inp.addEventListener('input',  () => {
-                const notasDOM = leerNotasDesdeDOM();
-                actualizarResumen(sesion.plantilla, notasDOM);
-                actualizarFilasPonderado(sesion.plantilla, notasDOM);
-                actualizarHintsEximen(sesion.plantilla, notasDOM);
-            });
-            inp.addEventListener('change', () => guardarNotaDesdeInput(inp));
-            tdNota.appendChild(inp);
-            // Hint de nota mínima para eximirse (solo no-EXAMEN y con % real)
-            if (comp.key !== 'EXAMEN' && (sub.porcentaje || 0) > 0) {
-                const hintEl = document.createElement('div');
-                hintEl.className = 'exim-hint';
-                hintEl.dataset.hintComp = comp.key;
-                hintEl.dataset.hintSub  = sub.nombre;
-                tdNota.appendChild(hintEl);
+            tdNota.style.cssText = 'vertical-align:middle;';
+
+            if (!esNP) {
+                const inp = document.createElement('input');
+                inp.type = 'number'; inp.min = '1'; inp.max = '7'; inp.step = '0.1';
+                inp.className = 'input-nota';
+                inp.placeholder = '—';
+                if (notaVal !== null) inp.value = notaVal;
+                inp.dataset.compKey   = comp.key;
+                inp.dataset.subNombre = sub.nombre;
+                inp.addEventListener('input', () => {
+                    const notasDOM = leerNotasDesdeDOM();
+                    actualizarResumen(sesion.plantilla, notasDOM);
+                    actualizarFilasPonderado(sesion.plantilla, notasDOM);
+                    actualizarHintsEximen(sesion.plantilla, notasDOM);
+                });
+                inp.addEventListener('change', () => guardarNotaDesdeInput(inp));
+                tdNota.appendChild(inp);
+                if (comp.key !== 'EXAMEN' && (sub.porcentaje || 0) > 0 && !esRecup) {
+                    const hintEl = document.createElement('div');
+                    hintEl.className = 'exim-hint';
+                    hintEl.dataset.hintComp = comp.key;
+                    hintEl.dataset.hintSub  = sub.nombre;
+                    tdNota.appendChild(hintEl);
+                }
+            } else {
+                const npBadge = document.createElement('span');
+                npBadge.className = 'np-badge';
+                npBadge.textContent = 'N/P';
+                tdNota.appendChild(npBadge);
             }
+
+            // Botón N/P solo para subs con porcentaje > 0 no recuperativas y no EXAMEN
+            if (comp.key !== 'EXAMEN' && (sub.porcentaje || 0) > 0 && !esRecup) {
+                const npBtn = document.createElement('button');
+                npBtn.className = 'btn-np' + (esNP ? ' btn-np--active' : '');
+                npBtn.title = esNP ? 'Quitar N/P' : 'Marcar N/P';
+                npBtn.textContent = esNP ? '↩' : 'N/P';
+                npBtn.addEventListener('click', async () => {
+                    const nuevaNota = esNP ? null : NP_VALUE;
+                    await guardarNota(sesion.usuarioId, sesion.plantillaId, comp.key, sub.nombre, nuevaNota);
+                    const notasAct = await obtenerNotasPorUsuarioPlantilla(sesion.usuarioId, sesion.plantillaId);
+                    renderizarTabla(sesion.plantilla, notasAct);
+                    actualizarResumen(sesion.plantilla, notasAct);
+                    actualizarHintsEximen(sesion.plantilla, notasAct);
+                });
+                tdNota.appendChild(npBtn);
+            }
+
             tr.appendChild(tdNota);
 
             // Ponderado
             const tdPond = document.createElement('td');
             tdPond.className = 'td-center ponderado-cell';
-            tdPond.textContent = contrib;
+            tdPond.textContent = esNP ? 'N/P' : contrib;
+            if (esNP) tdPond.style.color = 'var(--text-secondary)';
             tr.appendChild(tdPond);
 
             tbody.appendChild(tr);
@@ -596,9 +639,38 @@ function renderizarTabla(plantilla, notasAlumno) {
 /** Lee las notas actuales directamente del DOM (sin ir a la BD) */
 function leerNotasDesdeDOM() {
     const notas = [];
+    // Inputs normales de nota
     $('#tablaNotas').querySelectorAll('.input-nota').forEach(inp => {
         const val = inp.value !== '' ? parseFloat(inp.value) : null;
         notas.push({ compKey: inp.dataset.compKey, subNombre: inp.dataset.subNombre, nota: val });
+    });
+    // Subs marcadas como N/P (botón activo)
+    $('#tablaNotas').querySelectorAll('.btn-np--active').forEach(btn => {
+        const tr = btn.closest('tr');
+        const inp = tr?.querySelector('.input-nota');
+        if (inp) {
+            // Ya está incluido arriba, reemplazar su valor con NP_VALUE
+            const entry = notas.find(n => n.compKey === inp.dataset.compKey && n.subNombre === inp.dataset.subNombre);
+            if (entry) entry.nota = NP_VALUE;
+        }
+    });
+    // También leer los np-badge (filas ya guardadas como N/P sin input)
+    $('#tablaNotas').querySelectorAll('.np-badge').forEach(badge => {
+        const tr = badge.closest('tr');
+        const npBtn = tr?.querySelector('.btn-np--active');
+        if (npBtn) {
+            // Extraer compKey/subNombre del botón de desmarcar (hermano del badge)
+            const tdNota = badge.closest('td');
+            const inp = tdNota?.querySelector('.input-nota');
+            // Si no hay input (fila N/P renderizada), buscamos datos del hint o del btn
+            // Los datos están en la fila — buscar el exim-hint si existe
+            const hint = tdNota?.querySelector('.exim-hint');
+            if (hint) {
+                const exists = notas.find(n => n.compKey === hint.dataset.hintComp && n.subNombre === hint.dataset.hintSub);
+                if (!exists) notas.push({ compKey: hint.dataset.hintComp, subNombre: hint.dataset.hintSub, nota: NP_VALUE });
+                else exists.nota = NP_VALUE;
+            }
+        }
     });
     return notas;
 }
