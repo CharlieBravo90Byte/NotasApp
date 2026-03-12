@@ -5,6 +5,7 @@
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         await initDB();
+        await seedPlantillasPredeterminadas();
         await cargarSelectUsuarios();
         await cargarSelectPlantillas();
         console.log('✅ NotasApp v3.0 iniciado correctamente');
