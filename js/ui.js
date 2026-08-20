@@ -251,25 +251,25 @@ async function abrirEditorPlantilla(plantillaId) {
                 {
                     key: 'EJERCICIO', label: 'Ejercicios', peso: 30, color: '#16a34a',
                     subs: [
-                        { nombre: 'Ejercicio 1', porcentaje: 25 },
-                        { nombre: 'Ejercicio 2', porcentaje: 25 },
-                        { nombre: 'Ejercicio 3', porcentaje: 25 },
-                        { nombre: 'Ejercicio 4', porcentaje: 25 }
+                        { nombre: 'Ejercicio 1', porcentaje: 25, contenido: '', fecha: '' },
+                        { nombre: 'Ejercicio 2', porcentaje: 25, contenido: '', fecha: '' },
+                        { nombre: 'Ejercicio 3', porcentaje: 25, contenido: '', fecha: '' },
+                        { nombre: 'Ejercicio 4', porcentaje: 25, contenido: '', fecha: '' }
                     ]
                 },
                 {
                     key: 'CATEDRA', label: 'Cátedra', peso: 45, color: '#8b5cf6',
                     subs: [
-                        { nombre: 'Cátedra Diagnóstico', porcentaje: 0 },
-                        { nombre: 'Cátedra 1',           porcentaje: 33.33 },
-                        { nombre: 'Cátedra 2',           porcentaje: 33.33 },
-                        { nombre: 'Cátedra 3',           porcentaje: 33.33 },
-                        { nombre: 'Cátedra Recuperativa',porcentaje: 0 }
+                        { nombre: 'Cátedra Diagnóstico', porcentaje: 0, contenido: '', fecha: '' },
+                        { nombre: 'Cátedra 1',           porcentaje: 33.33, contenido: '', fecha: '' },
+                        { nombre: 'Cátedra 2',           porcentaje: 33.33, contenido: '', fecha: '' },
+                        { nombre: 'Cátedra 3',           porcentaje: 33.33, contenido: '', fecha: '' },
+                        { nombre: 'Cátedra Recuperativa', porcentaje: 0, contenido: '', fecha: '' }
                     ]
                 },
                 {
                     key: 'EXAMEN', label: 'Examen', peso: 25, color: '#dc2626',
-                    subs: [{ nombre: 'Examen', porcentaje: 100 }]
+                    subs: [{ nombre: 'Examen', porcentaje: 100, contenido: '', fecha: '' }]
                 }
             ]
         };
@@ -339,7 +339,7 @@ function renderComponenteEditor(container, comp, ci) {
         renderEditorCompleto();
     });
     div.querySelector('.add-sub').addEventListener('click', () => {
-        editorPlantilla.componentes[ci].subs.push({ nombre: 'Nueva evaluación', porcentaje: 0 });
+        editorPlantilla.componentes[ci].subs.push({ nombre: 'Nueva evaluación', porcentaje: 0, contenido: '', fecha: '' });
         renderEditorCompleto();
     });
 
@@ -348,6 +348,18 @@ function renderComponenteEditor(container, comp, ci) {
         row.querySelector('.sub-nombre').addEventListener('input', e => {
             editorPlantilla.componentes[ci].subs[si].nombre = e.target.value;
         });
+        const contenidoInput = row.querySelector('.sub-contenido');
+        if (contenidoInput) {
+            contenidoInput.addEventListener('input', e => {
+                editorPlantilla.componentes[ci].subs[si].contenido = e.target.value || '';
+            });
+        }
+        const fechaInput = row.querySelector('.sub-fecha');
+        if (fechaInput) {
+            fechaInput.addEventListener('change', e => {
+                editorPlantilla.componentes[ci].subs[si].fecha = e.target.value || '';
+            });
+        }
         row.querySelector('.sub-pct').addEventListener('input', e => {
             editorPlantilla.componentes[ci].subs[si].porcentaje = parseFloat(e.target.value) || 0;
             actualizarTotalSubsEnBloque(div, editorPlantilla.componentes[ci].subs);
@@ -383,7 +395,7 @@ function renderComponenteEditor(container, comp, ci) {
                 label: 'Nuevo componente',
                 peso:  0,
                 color: COMP_COLORS[editorPlantilla.componentes.length % COMP_COLORS.length],
-                subs:  [{ nombre: 'Evaluación 1', porcentaje: 100 }]
+                subs:  [{ nombre: 'Evaluación 1', porcentaje: 100, fecha: '' }]
             });
             renderEditorCompleto();
         });
@@ -395,6 +407,8 @@ function renderSubRow(ci, si, sub) {
     return `
         <div class="sub-row">
             <input type="text" class="input input-sm sub-nombre" value="${sub.nombre}" placeholder="Nombre evaluación">
+            <input type="text" class="input input-sm sub-contenido" value="${(sub.contenido || '').replace(/"/g, '&quot;')}" placeholder="Temas / contenido" title="Temas o cronograma de la evaluación">
+            <input type="date" class="input input-sm sub-fecha" value="${sub.fecha || ''}" title="Fecha de la evaluación">
             <div class="peso-input-wrap">
                 <input type="number" class="input input-sm input-pct sub-pct"
                     value="${sub.porcentaje}" min="0" max="100" step="0.01" placeholder="%">
@@ -407,6 +421,35 @@ function renderSubRow(ci, si, sub) {
 
 function calcularTotalSubs(subs) {
     return Math.round(subs.reduce((s, sub) => s + (parseFloat(sub.porcentaje) || 0), 0) * 100) / 100;
+}
+
+function obtenerEtiquetaRAA(contenido, compKey, indiceEvaluacion) {
+    const match = contenido.match(/RAA\s*\d+(?:\s*\+\s*RAA\s*\d+)*/i);
+    if (match) return match[0].replace(/\s+/g, ' ').toUpperCase();
+
+    const raaPorComponente = {
+        EJERCICIO: ['RAA1', 'RAA2', 'RAA3', 'RAA4', 'RAA5', 'RAA6', 'RAA7'],
+        CATEDRA: ['RAA1', 'RAA2', 'RAA3', 'RAA4', 'RAA5', 'RAA6', 'RAA7'],
+        EXAMEN: ['RAA1 + RAA2 + RAA3 + RAA4 + RAA5 + RAA6 + RAA7']
+    };
+    const etiquetas = raaPorComponente[compKey] || raaPorComponente.EJERCICIO;
+    return `Tema ${etiquetas[Math.min(indiceEvaluacion, etiquetas.length - 1)]}`;
+}
+
+async function guardarFechaEvaluacion(comp, sub, fecha, input) {
+    const fechaAnterior = sub.fecha || '';
+    sub.fecha = fecha;
+    try {
+        await actualizarPlantilla({
+            ...sesion.plantilla,
+            componentes: sesion.plantilla.componentes
+        });
+        toast(`Fecha de ${sub.nombre} actualizada`, 'success');
+    } catch (err) {
+        sub.fecha = fechaAnterior;
+        input.value = fechaAnterior;
+        toast('No se pudo actualizar la fecha: ' + err.message, 'error');
+    }
 }
 
 function actualizarTotalSubsEnBloque(bloque, subs) {
@@ -552,6 +595,55 @@ function renderizarTabla(plantilla, notasAlumno) {
             tdSub.textContent = sub.nombre;
             tr.appendChild(tdSub);
 
+            // Contenido / cronograma
+            const tdContenido = document.createElement('td');
+            tdContenido.className = 'td-contenido';
+            const contenidoTexto = (sub.contenido || '').trim();
+            if (contenidoTexto) {
+                const raa = obtenerEtiquetaRAA(contenidoTexto, comp.key, si);
+                const trigger = document.createElement('button');
+                trigger.type = 'button';
+                trigger.className = 'contenido-pill';
+                trigger.textContent = raa;
+                trigger.title = 'Mostrar resumen de contenidos';
+                trigger.setAttribute('aria-expanded', 'false');
+                const tooltip = document.createElement('div');
+                tooltip.className = 'sub-tooltip';
+                tooltip.textContent = contenidoTexto;
+                tooltip.setAttribute('role', 'status');
+                const alternarTooltip = (visible) => {
+                    tooltip.classList.toggle('visible', visible);
+                    trigger.setAttribute('aria-expanded', String(visible));
+                };
+                trigger.addEventListener('mouseenter', () => alternarTooltip(true));
+                trigger.addEventListener('mouseleave', () => alternarTooltip(false));
+                trigger.addEventListener('focus', () => alternarTooltip(true));
+                trigger.addEventListener('blur', () => alternarTooltip(false));
+                trigger.addEventListener('click', () => {
+                    if (!window.matchMedia('(hover: hover)').matches) {
+                        alternarTooltip(!tooltip.classList.contains('visible'));
+                    }
+                });
+                tdContenido.appendChild(trigger);
+                tdContenido.appendChild(tooltip);
+            } else {
+                tdContenido.textContent = '—';
+            }
+            tr.appendChild(tdContenido);
+
+            // Fecha de evaluación
+            const tdFecha = document.createElement('td');
+            tdFecha.className = 'td-center td-fecha';
+            const fechaInput = document.createElement('input');
+            fechaInput.type = 'date';
+            fechaInput.className = 'fecha-evaluacion';
+            fechaInput.value = sub.fecha || '';
+            fechaInput.title = 'Editar fecha de evaluación';
+            fechaInput.setAttribute('aria-label', `Fecha de ${sub.nombre}`);
+            fechaInput.addEventListener('change', () => guardarFechaEvaluacion(comp, sub, fechaInput.value, fechaInput));
+            tdFecha.appendChild(fechaInput);
+            tr.appendChild(tdFecha);
+
             // % parcial (dinámico si es recuperativa)
             const tdPct = document.createElement('td');
             tdPct.className = 'td-center pct-cell';
@@ -628,6 +720,8 @@ function renderizarTabla(plantilla, notasAlumno) {
         trTotal.className = 'fila-total';
         trTotal.innerHTML = `
             <td style="text-align:right;color:var(--text-secondary);font-size:0.82rem;">Promedio componente</td>
+            <td class="td-center"></td>
+            <td class="td-center"></td>
             <td class="td-center"></td>
             <td class="td-center"><strong>${redondear(promComp)}</strong></td>
             <td class="td-center" style="color:var(--text-muted);font-size:0.8rem;">${comp.peso}% NF</td>

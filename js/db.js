@@ -191,157 +191,191 @@ async function eliminarNotasDeSub(plantillaId, compKey, subNombre) {
 // detectar y actualizar la plantilla en DB aunque el nombre cambie.
 const PLANTILLAS_PREDETERMINADAS = [
     {
-        predKey: 'CVE523',
-        nombre: 'INMUNOLOGÍA - CVE523',
+        predKey: 'GENETICA_7725',
+        nombre: 'GENÉTICA - NRC 7725',
         umbralEximen: 5.5,
-        examenObligatorio: false,       // puede eximirse ≥ 5,5
+        examenObligatorio: false,
         componentes: [
             {
-                key: 'EJERCICIO', label: 'Ejercicios', peso: 20, color: '#16a34a',
+                key: 'EJERCICIO', label: 'EJERCICIO', peso: 25, color: '#16a34a',
                 subs: [
-                    { nombre: 'Ejercicio 1', porcentaje: 25 },
-                    { nombre: 'Ejercicio 2', porcentaje: 25 },
-                    { nombre: 'Ejercicio 3', porcentaje: 25 },
-                    { nombre: 'Ejercicio 4', porcentaje: 25 }
+                    { nombre: 'EJERCICIO 1', porcentaje: 25, contenido: 'RAA1; conceptos básicos de genética y mecanismos de transmisión hereditaria.', fecha: '' },
+                    { nombre: 'EJERCICIO 2', porcentaje: 25, contenido: 'RAA2; variación genética cualitativa/cuantitativa y su relación con sistemas agroproductivos.', fecha: '' },
+                    { nombre: 'EJERCICIO 3', porcentaje: 25, contenido: 'RAA3; ejercicios de genética clásica y moderna aplicada a casos prácticos.', fecha: '' },
+                    { nombre: 'EJERCICIO 4', porcentaje: 25, contenido: 'RAA4; genética mendeliana, poblaciones y cuantitativa con mejoramiento genético.', fecha: '' }
                 ]
             },
             {
-                key: 'CATEDRA', label: 'Cátedras', peso: 45, color: '#8b5cf6',
+                key: 'CATEDRA', label: 'CATEDRA', peso: 45, color: '#8b5cf6',
                 subs: [
-                    { nombre: 'Cátedra Recuperativa', porcentaje: 0 },
-                    { nombre: 'Cátedra 1',            porcentaje: 33.33 },
-                    { nombre: 'Cátedra 2',            porcentaje: 33.33 },
-                    { nombre: 'Cátedra 3',            porcentaje: 33.34 },
-                    { nombre: 'Cátedra Diagnóstico',  porcentaje: 0 }
+                    { nombre: 'CATEDRA RECUPERATIVA', porcentaje: 0, contenido: 'Recuperación de contenidos pendientes de la unidad de genética.', fecha: '' },
+                    { nombre: 'CATEDRA 1', porcentaje: 33.33, contenido: 'RAA1 + RAA2: conceptos generales de transmisión hereditaria y variación genética.', fecha: '' },
+                    { nombre: 'CATEDRA 2', porcentaje: 33.33, contenido: 'RAA3 + RAA4: ejercicios de genética clásica, poblacional y cuantitativa.', fecha: '' },
+                    { nombre: 'CATEDRA 3', porcentaje: 33.34, contenido: 'RAA5 + RAA7: mecanismos de cambio genético y trabajo colaborativo en resolución de problemas.', fecha: '' },
+                    { nombre: 'CATEDRA DIAGNOSTICO', porcentaje: 0, contenido: 'Diagnóstico inicial de conceptos y preparación para la unidad.', fecha: '' }
                 ]
             },
             {
-                key: 'EXAMEN', label: 'Examen', peso: 35, color: '#dc2626',
-                subs: [
-                    { nombre: 'Examen', porcentaje: 100 }
-                ]
+                key: 'EXAMEN', label: 'EXAMEN', peso: 30, color: '#dc2626',
+                subs: [{ nombre: 'EXAMEN', porcentaje: 100, contenido: 'RAA1 a RAA7: integración general de conceptos, ejercicios y aplicación en genética.', fecha: '' }]
             }
         ]
     },
     {
-        predKey: 'CVE543',
-        nombre: 'REPRODUCCIÓN E INSEMINACIÓN ARTIFICIAL - CVE543',
+        predKey: 'ENFERMEDADES_PARASITARIAS_9102',
+        nombre: 'ENFERMEDADES PARASITARIAS - NRC 9102',
         umbralEximen: 5.5,
-        examenObligatorio: false,       // puede eximirse ≥ 5,5
+        examenObligatorio: true,
         componentes: [
             {
-                key: 'EJERCICIO', label: 'Ejercicios', peso: 30, color: '#16a34a',
+                key: 'EJERCICIO', label: 'EJERCICIO', peso: 30, color: '#16a34a',
                 subs: [
-                    { nombre: 'Ejercicio 1', porcentaje: 25 },
-                    { nombre: 'Ejercicio 2', porcentaje: 25 },
-                    { nombre: 'Ejercicio 3', porcentaje: 25 },
-                    { nombre: 'Ejercicio 4', porcentaje: 25 }
+                    { nombre: 'EJERCICIO 1', porcentaje: 12.5, contenido: 'Tema según cronograma de la unidad; revisar contenido asignado por la docente.', fecha: '' },
+                    { nombre: 'EJERCICIO 2', porcentaje: 12.5, contenido: 'Tema según cronograma de la unidad; revisar contenido asignado por la docente.', fecha: '' },
+                    { nombre: 'EJERCICIO 3', porcentaje: 12.5, contenido: 'Tema según cronograma de la unidad; revisar contenido asignado por la docente.', fecha: '' },
+                    { nombre: 'EJERCICIO 4', porcentaje: 12.5, contenido: 'Tema según cronograma de la unidad; revisar contenido asignado por la docente.', fecha: '' },
+                    { nombre: 'EJERCICIO 5', porcentaje: 12.5, contenido: 'Tema según cronograma de la unidad; revisar contenido asignado por la docente.', fecha: '' },
+                    { nombre: 'EJERCICIO 6', porcentaje: 12.5, contenido: 'Tema según cronograma de la unidad; revisar contenido asignado por la docente.', fecha: '' },
+                    { nombre: 'EJERCICIO 7', porcentaje: 12.5, contenido: 'Tema según cronograma de la unidad; revisar contenido asignado por la docente.', fecha: '' },
+                    { nombre: 'EJERCICIO 8', porcentaje: 12.5, contenido: 'Tema según cronograma de la unidad; revisar contenido asignado por la docente.', fecha: '' }
                 ]
             },
             {
-                key: 'CATEDRA', label: 'Cátedras', peso: 45, color: '#8b5cf6',
+                key: 'CATEDRA', label: 'CATEDRA', peso: 40, color: '#8b5cf6',
                 subs: [
-                    { nombre: 'Cátedra Recuperativa', porcentaje: 0 },
-                    { nombre: 'Cátedra 1',            porcentaje: 33.33 },
-                    { nombre: 'Cátedra 2',            porcentaje: 33.33 },
-                    { nombre: 'Cátedra 3',            porcentaje: 33.34 },
-                    { nombre: 'Cátedra Diagnóstico',  porcentaje: 0 }
+                    { nombre: 'CATEDRA RECUPERATIVA', porcentaje: 0, contenido: 'Recuperación de contenidos pendientes.', fecha: '' },
+                    { nombre: 'CATEDRA 1', porcentaje: 25, contenido: 'Control de contenidos semestrales según cronograma.', fecha: '2026-08-26' },
+                    { nombre: 'CATEDRA 2', porcentaje: 25, contenido: 'Control de contenidos semestrales según cronograma.', fecha: '' },
+                    { nombre: 'CATEDRA 3', porcentaje: 25, contenido: 'Control de contenidos semestrales según cronograma.', fecha: '' },
+                    { nombre: 'CATEDRA 4', porcentaje: 25, contenido: 'Control de contenidos semestrales según cronograma.', fecha: '' },
+                    { nombre: 'CATEDRA DIAGNOSTICO', porcentaje: 0, contenido: 'Diagnóstico inicial de conocimientos.', fecha: '' }
                 ]
             },
             {
-                key: 'EXAMEN', label: 'Examen', peso: 25, color: '#dc2626',
-                subs: [
-                    { nombre: 'Examen', porcentaje: 100 }
-                ]
+                key: 'EXAMEN', label: 'EXAMEN', peso: 30, color: '#dc2626',
+                subs: [{ nombre: 'EXAMEN', porcentaje: 100, contenido: 'Examen final integrado del ramo.', fecha: '' }]
             }
         ]
     },
     {
-        predKey: 'CVE551',
-        nombre: 'TECNOLOGÍA DE LOS ALIMENTOS - CVE551',
+        predKey: 'FARMACOLOGIA_TOXICOLOGIA_9165',
+        nombre: 'FARMACOLOGÍA Y TOXICOLOGÍA - NRC 9165',
         umbralEximen: 5.5,
-        examenObligatorio: false,       // puede eximirse ≥ 5,5
+        examenObligatorio: false,
         componentes: [
             {
-                key: 'EJERCICIO', label: 'Ejercicios', peso: 20, color: '#16a34a',
+                key: 'EJERCICIO', label: 'EJERCICIO', peso: 30, color: '#16a34a',
                 subs: [
-                    { nombre: 'Ejercicio 1', porcentaje: 25 },
-                    { nombre: 'Ejercicio 2', porcentaje: 25 },
-                    { nombre: 'Ejercicio 3', porcentaje: 25 },
-                    { nombre: 'Ejercicio 4', porcentaje: 25 }
+                    { nombre: 'EJERCICIO 1', porcentaje: 25, contenido: 'Farmacología general: principios y mecanismos de acción.', fecha: '' },
+                    { nombre: 'EJERCICIO 2', porcentaje: 25, contenido: 'Farmacocinética, vía de administración y biodisponibilidad.', fecha: '' },
+                    { nombre: 'EJERCICIO 3', porcentaje: 25, contenido: 'Toxicología básica, conceptos y riesgos de exposición.', fecha: '' },
+                    { nombre: 'EJERCICIO 4', porcentaje: 25, contenido: 'Integración de farmacología y toxicología con casos clínicos.', fecha: '' }
                 ]
             },
             {
-                key: 'CATEDRA', label: 'Cátedras', peso: 45, color: '#8b5cf6',
+                key: 'CATEDRA', label: 'CATEDRA', peso: 45, color: '#8b5cf6',
                 subs: [
-                    { nombre: 'Cátedra 1', porcentaje: 33.33 },
-                    { nombre: 'Cátedra 2', porcentaje: 33.33 },
-                    { nombre: 'Cátedra 3', porcentaje: 33.34 }
+                    { nombre: 'CATEDRA RECUPERATIVA', porcentaje: 0, contenido: 'Recuperación de contenidos pendientes.', fecha: '' },
+                    { nombre: 'CATEDRA 1', porcentaje: 33.33, contenido: 'Conceptos base de farmacología y toxicología.', fecha: '' },
+                    { nombre: 'CATEDRA 2', porcentaje: 33.33, contenido: 'Mecanismos farmacológicos y toxicocinética.', fecha: '' },
+                    { nombre: 'CATEDRA 3', porcentaje: 33.34, contenido: 'Casos y aplicación clínica de fármacos y tóxicos.', fecha: '' },
+                    { nombre: 'CATEDRA DIAGNOSTICO', porcentaje: 0, contenido: 'Diagnóstico inicial del curso.', fecha: '' }
                 ]
             },
             {
-                key: 'EXAMEN', label: 'Examen', peso: 35, color: '#dc2626',
-                subs: [
-                    { nombre: 'Examen', porcentaje: 100 }
-                ]
+                key: 'EXAMEN', label: 'EXAMEN', peso: 25, color: '#dc2626',
+                subs: [{ nombre: 'EXAMEN', porcentaje: 100, contenido: 'Examen final de farmacología y toxicología.', fecha: '' }]
             }
         ]
     },
     {
-        predKey: 'CVE591',
-        nombre: 'FISIOPATOLOGÍA - CVE591',
+        predKey: 'ENFERMEDADES_INFECCIOSAS_9215',
+        nombre: 'ENFERMEDADES INFECCIOSAS - NRC 9215',
         umbralEximen: 5.5,
-        examenObligatorio: false,       // puede eximirse ≥ 5,5
+        examenObligatorio: false,
         componentes: [
             {
-                key: 'EJERCICIO', label: 'Ejercicios', peso: 30, color: '#16a34a',
+                key: 'EJERCICIO', label: 'EJERCICIO', peso: 20, color: '#16a34a',
                 subs: [
-                    { nombre: 'Ejercicio 1', porcentaje: 25 },
-                    { nombre: 'Ejercicio 2', porcentaje: 25 },
-                    { nombre: 'Ejercicio 3', porcentaje: 25 },
-                    { nombre: 'Ejercicio 4', porcentaje: 25 }
+                    { nombre: 'EJERCICIO 1', porcentaje: 25, contenido: 'Diagnóstico clínico y epidemiología general.', fecha: '2026-08-19' },
+                    { nombre: 'EJERCICIO 2', porcentaje: 25, contenido: 'Patogenia y manejo de infecciones bacterianas.', fecha: '2026-09-16' },
+                    { nombre: 'EJERCICIO 3', porcentaje: 25, contenido: 'Infecciones virales y modelos de transmisión.', fecha: '2026-09-23' },
+                    { nombre: 'EJERCICIO 4', porcentaje: 25, contenido: 'Aplicación práctica de protocolos diagnósticos.', fecha: '2026-10-28' }
                 ]
             },
             {
-                key: 'CATEDRA', label: 'Cátedras', peso: 45, color: '#8b5cf6',
+                key: 'CATEDRA', label: 'CATEDRA', peso: 45, color: '#8b5cf6',
                 subs: [
-                    { nombre: 'Cátedra 1', porcentaje: 33.33 },
-                    { nombre: 'Cátedra 2', porcentaje: 33.33 },
-                    { nombre: 'Cátedra 3', porcentaje: 33.34 }
+                    { nombre: 'CATEDRA RECUPERATIVA', porcentaje: 0, contenido: 'Recuperación de contenidos pendientes.', fecha: '2026-12-02' },
+                    { nombre: 'CATEDRA 1', porcentaje: 33.33, contenido: 'Generalidades, epidemiología y diagnóstico de infecciones.', fecha: '2026-09-02' },
+                    { nombre: 'CATEDRA 2', porcentaje: 33.33, contenido: 'Infecciones bacterianas y manejo terapéutico.', fecha: '2026-10-14' },
+                    { nombre: 'CATEDRA 3', porcentaje: 33.34, contenido: 'Infecciones virales, micóticas y su aplicación clínica.', fecha: '2026-11-25' },
+                    { nombre: 'CATEDRA DIAGNOSTICO', porcentaje: 0, contenido: 'Diagnóstico inicial del curso.', fecha: '2026-08-12' }
                 ]
             },
             {
-                key: 'EXAMEN', label: 'Examen', peso: 25, color: '#dc2626',
-                subs: [
-                    { nombre: 'Examen', porcentaje: 100 }
-                ]
+                key: 'EXAMEN', label: 'EXAMEN', peso: 35, color: '#dc2626',
+                subs: [{ nombre: 'EXAMEN', porcentaje: 100, contenido: 'Examen final integrativo de enfermedades infecciosas.', fecha: '2026-12-09' }]
             }
         ]
     },
     {
-        predKey: 'INGLES2',
-        nombre: 'INGLÉS II - NRC 7911',
-        umbralEximen: null,
-        examenObligatorio: true,        // examen SIEMPRE obligatorio, no puede eximirse
+        predKey: 'PATOLOGIA_SISTEMAS_9295',
+        nombre: 'PATOLOGÍA DE SISTEMAS - NRC 9295',
+        umbralEximen: 5.5,
+        examenObligatorio: false,
         componentes: [
             {
-                key: 'EJERCICIO', label: 'Ejercicios', peso: 30, color: '#16a34a',
+                key: 'EJERCICIO', label: 'EJERCICIO', peso: 30, color: '#16a34a',
                 subs: [
-                    { nombre: 'Ejercicio 1', porcentaje: 50 },
-                    { nombre: 'Ejercicio 2', porcentaje: 50 }
+                    { nombre: 'EJERCICIO 1', porcentaje: 25, contenido: 'Patología general y principios de lesión celular.', fecha: '' },
+                    { nombre: 'EJERCICIO 2', porcentaje: 25, contenido: 'Patología de sistemas: mecanismos y diagnóstico.', fecha: '' },
+                    { nombre: 'EJERCICIO 3', porcentaje: 25, contenido: 'Casos clínicos con correlación anatomo-patológica.', fecha: '' },
+                    { nombre: 'EJERCICIO 4', porcentaje: 25, contenido: 'Integración de patrones morfológicos y funcionales.', fecha: '' }
                 ]
             },
             {
-                key: 'CATEDRA', label: 'Cátedras', peso: 30, color: '#8b5cf6',
+                key: 'CATEDRA', label: 'CATEDRA', peso: 45, color: '#8b5cf6',
                 subs: [
-                    { nombre: 'Cátedra 1', porcentaje: 100 }
+                    { nombre: 'CATEDRA RECUPERATIVA', porcentaje: 0, contenido: 'Recuperación de contenidos pendientes.', fecha: '' },
+                    { nombre: 'CATEDRA 1', porcentaje: 33.33, contenido: 'Patología general y mecanismos de daño tisular.', fecha: '' },
+                    { nombre: 'CATEDRA 2', porcentaje: 33.33, contenido: 'Patología de sistemas: órganos y funciones.', fecha: '' },
+                    { nombre: 'CATEDRA 3', porcentaje: 33.34, contenido: 'Integración diagnóstica y correlación clínica.', fecha: '' },
+                    { nombre: 'CATEDRA DIAGNOSTICO', porcentaje: 0, contenido: 'Diagnóstico inicial del curso.', fecha: '' }
                 ]
             },
             {
-                key: 'EXAMEN', label: 'Examen', peso: 40, color: '#dc2626',
+                key: 'EXAMEN', label: 'EXAMEN', peso: 25, color: '#dc2626',
+                subs: [{ nombre: 'EXAMEN', porcentaje: 100, contenido: 'Examen final de patología de sistemas.', fecha: '' }]
+            }
+        ]
+    },
+    {
+        predKey: 'OBSTETRICIA_GINECOLOGIA_9361',
+        nombre: 'OBSTETRICIA Y GINECOLOGÍA - NRC 9361',
+        umbralEximen: 5.5,
+        examenObligatorio: false,
+        componentes: [
+            {
+                key: 'EJERCICIO', label: 'EJERCICIO', peso: 30, color: '#16a34a',
                 subs: [
-                    { nombre: 'Examen', porcentaje: 100 }
+                    { nombre: 'EJERCICIO 1', porcentaje: 25, contenido: 'Conceptos básicos de obstetricia y ginecología.', fecha: '' },
+                    { nombre: 'EJERCICIO 2', porcentaje: 25, contenido: 'Patologías ginecológicas y evaluación clínica.', fecha: '' },
+                    { nombre: 'EJERCICIO 3', porcentaje: 25, contenido: 'Embarazo, parto y control prenatal.', fecha: '' },
+                    { nombre: 'EJERCICIO 4', porcentaje: 25, contenido: 'Integración clínica y manejo obstétrico.', fecha: '' }
                 ]
+            },
+            {
+                key: 'CATEDRA', label: 'CATEDRA', peso: 45, color: '#8b5cf6',
+                subs: [
+                    { nombre: 'CATEDRA 1', porcentaje: 33.33, contenido: 'Fundamentos de obstetricia y ginecología.', fecha: '2026-09-01' },
+                    { nombre: 'CATEDRA 2', porcentaje: 33.33, contenido: 'PATOLOGÍA GINECOLÓGICA y atención de la mujer.', fecha: '2026-10-06' },
+                    { nombre: 'CATEDRA 3', porcentaje: 33.34, contenido: 'Embarazo, parto y control prenatal avanzado.', fecha: '2026-11-17' }
+                ]
+            },
+            {
+                key: 'EXAMEN', label: 'EXAMEN', peso: 25, color: '#dc2626',
+                subs: [{ nombre: 'EXAMEN', porcentaje: 100, contenido: 'Examen final integrativo de obstetricia y ginecología.', fecha: '2026-12-08' }]
             }
         ]
     }
@@ -381,16 +415,31 @@ async function seedPlantillasPredeterminadas() {
     for (const p of PLANTILLAS_PREDETERMINADAS) {
         const enDB = actuales.find(e => e.predKey === p.predKey);
         if (enDB) {
+            const componentesActualizados = p.componentes.map(comp => {
+                const compAnterior = enDB.componentes?.find(c => c.key === comp.key);
+                return {
+                    ...comp,
+                    subs: comp.subs.map(sub => {
+                        const subAnterior = compAnterior?.subs?.find(s => s.nombre === sub.nombre);
+                        return {
+                            ...sub,
+                            fecha: sub.fecha || subAnterior?.fecha || ''
+                        };
+                    })
+                };
+            });
+
             // Actualizar en caso de cambio (nombre, flags, componentes)
             const necesitaUpdate =
                 enDB.nombre            !== p.nombre            ||
                 enDB.examenObligatorio !== p.examenObligatorio  ||
-                enDB.umbralEximen      !== p.umbralEximen;
+                enDB.umbralEximen      !== p.umbralEximen       ||
+                JSON.stringify(enDB.componentes) !== JSON.stringify(componentesActualizados);
             if (necesitaUpdate) {
                 await actualizarPlantilla({
                     ...enDB,
                     nombre:            p.nombre,
-                    componentes:       p.componentes,
+                    componentes:       componentesActualizados,
                     umbralEximen:      p.umbralEximen,
                     examenObligatorio: p.examenObligatorio,
                     predKey:           p.predKey
@@ -416,6 +465,29 @@ async function seedPlantillasPredeterminadas() {
     if (insertados > 0 || actualizados > 0) {
         console.log(`✅ Ramos predeterminados — insertados: ${insertados}, actualizados: ${actualizados}`);
     }
+}
+
+// ════════════════════════════════════════
+//  EXPORTAR
+// ════════════════════════════════════════
+async function exportarDatos(usuarioId) {
+    const usuarios  = await obtenerUsuarios();
+    const usuario   = usuarios.find(u => u.id === usuarioId);
+    if (!usuario) throw new Error('Usuario no encontrado');
+
+    const plantillas = await obtenerPlantillas();
+    const resultado  = [];
+    for (const p of plantillas) {
+        const notas = await obtenerNotasPorUsuarioPlantilla(usuarioId, p.id);
+        resultado.push({ ...p, notas });
+    }
+
+    return {
+        exportDate: new Date().toISOString(),
+        app: 'NotasApp v3.0',
+        usuario,
+        plantillas: resultado
+    };
 }
 
 // ════════════════════════════════════════
