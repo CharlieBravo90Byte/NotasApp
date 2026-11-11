@@ -79,6 +79,15 @@ function obtenerUsuarios() {
     return promisifyRequest(getStore('usuarios').getAll());
 }
 
+async function guardarNotaHistorica(usuarioId, codigo, nota) {
+    const usuario = await promisifyRequest(getStore('usuarios').get(usuarioId));
+    if (!usuario) throw new Error('Alumno no encontrado');
+    usuario.notasHistoricas = { ...(usuario.notasHistoricas || {}) };
+    if (nota === null) delete usuario.notasHistoricas[codigo];
+    else usuario.notasHistoricas[codigo] = nota;
+    await promisifyRequest(getStore('usuarios', 'readwrite').put(usuario));
+}
+
 async function eliminarUsuario(id) {
     const todasNotas = await promisifyRequest(getStore('notas').getAll());
     const store = getStore('notas', 'readwrite');
@@ -105,8 +114,13 @@ function crearPlantilla(nombre, componentes, extras = {}) {
     return promisifyRequest(
         getStore('plantillas', 'readwrite').add({
             nombre, componentes,
+            codigo: extras.codigo ?? null,
+            requisito: extras.requisito ?? null,
+            condicionesNoCalculadas: extras.condicionesNoCalculadas ?? [],
+            requiereRevisionPonderaciones: extras.requiereRevisionPonderaciones ?? false,
+            semestre: extras.semestre ?? null,
             umbralEximen:      extras.umbralEximen      ?? null,
-            examenObligatorio: extras.examenObligatorio ?? false,
+            examenObligatorio: Object.hasOwn(extras, 'examenObligatorio') ? extras.examenObligatorio : false,
             fechaCreacion: new Date().toISOString()
         })
     );
@@ -381,71 +395,18 @@ const PLANTILLAS_PREDETERMINADAS = [
     }
 ];
 
-/**
- * Sincroniza los ramos predeterminados con la DB.
- *
- * - Elimina plantillas sin `predKey` (registros legacy sin identificador).
- * - Si no existe ninguno con ese `predKey` → lo inserta.
- * - Si ya existe → actualiza nombre, componentes y flags de exención.
- * - Las notas existentes del alumno quedan intactas.
- */
+/** Agrega ramos predeterminados ausentes sin modificar los existentes. */
 async function seedPlantillasPredeterminadas() {
     const existentes = await obtenerPlantillas();
-    let insertados = 0, actualizados = 0, eliminados = 0;
+    let insertados = 0;
 
-    // Nombres de las plantillas antiguas (NRC) que deben eliminarse al migrar
-    const NOMBRES_LEGACY = new Set([
-        'INMUNOLOGÍA - NRC 9819',
-        'REPRODUCCIÓN E INSEMINACIÓN AR - NRC 9837',
-        'TECNOLOGÍA DE LOS ALIMENTOS - NRC 9934',
-        'FISIOPATOLOGÍA - NRC 9952',
-        'INGLÉS II - NRC 7911'
-    ]);
-
-    // Limpiar SOLO las plantillas legacy conocidas (sin predKey + nombre legacy)
-    for (const vieja of existentes.filter(e => !e.predKey && NOMBRES_LEGACY.has(e.nombre))) {
-        await eliminarPlantilla(vieja.id);
-        eliminados++;
-    }
-    if (eliminados > 0) console.log(`🗑️ Plantillas legacy eliminadas: ${eliminados}`);
-
-    // Re-leer la DB tras la limpieza
-    const actuales = await obtenerPlantillas();
+    // Los ramos existentes pertenecen al usuario: nunca se modifican ni eliminan al iniciar.
+    const actuales = existentes;
 
     for (const p of PLANTILLAS_PREDETERMINADAS) {
         const enDB = actuales.find(e => e.predKey === p.predKey);
         if (enDB) {
-            const componentesActualizados = p.componentes.map(comp => {
-                const compAnterior = enDB.componentes?.find(c => c.key === comp.key);
-                return {
-                    ...comp,
-                    subs: comp.subs.map(sub => {
-                        const subAnterior = compAnterior?.subs?.find(s => s.nombre === sub.nombre);
-                        return {
-                            ...sub,
-                            fecha: sub.fecha || subAnterior?.fecha || ''
-                        };
-                    })
-                };
-            });
-
-            // Actualizar en caso de cambio (nombre, flags, componentes)
-            const necesitaUpdate =
-                enDB.nombre            !== p.nombre            ||
-                enDB.examenObligatorio !== p.examenObligatorio  ||
-                enDB.umbralEximen      !== p.umbralEximen       ||
-                JSON.stringify(enDB.componentes) !== JSON.stringify(componentesActualizados);
-            if (necesitaUpdate) {
-                await actualizarPlantilla({
-                    ...enDB,
-                    nombre:            p.nombre,
-                    componentes:       componentesActualizados,
-                    umbralEximen:      p.umbralEximen,
-                    examenObligatorio: p.examenObligatorio,
-                    predKey:           p.predKey
-                });
-                actualizados++;
-            }
+            continue;
         } else {
             // Insertar nueva predeterminada
             await promisifyRequest(
@@ -462,8 +423,8 @@ async function seedPlantillasPredeterminadas() {
         }
     }
 
-    if (insertados > 0 || actualizados > 0) {
-        console.log(`✅ Ramos predeterminados — insertados: ${insertados}, actualizados: ${actualizados}`);
+    if (insertados > 0) {
+        console.log(`Ramos predeterminados insertados: ${insertados}`);
     }
 }
 

@@ -3,6 +3,7 @@
 // ══════════════════════════════════════
 
 const $ = (sel) => document.querySelector(sel);
+const escaparHtml = (valor) => String(valor ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // ── Estado global de sesión ──
 let sesion = {
@@ -124,19 +125,44 @@ $('#usuarioSelect').addEventListener('change', async () => {
 //  PLANTILLAS (select en panel)
 // ══════════════════════════════════════
 async function cargarSelectPlantillas() {
-    const sel        = $('#plantillaSelect');
+    const sel = $('#plantillaSelect');
+    const filtro = $('#semestreSelect');
     const plantillas = await obtenerPlantillas();
-    const prevVal    = sel.value;
-    sel.innerHTML    = '<option value="">Seleccionar ramo...</option>';
-    plantillas.forEach(p => {
+    const prevVal = sel.value;
+    const semestreAnterior = filtro.value || 'todos';
+    const semestres = [...new Set(plantillas.map(p => p.semestre).filter(Number.isInteger))].sort((a, b) => a - b);
+    filtro.innerHTML = '<option value="todos">Todos los semestres</option>';
+    for (const semestre of semestres) {
+        const opcion = document.createElement('option');
+        opcion.value = String(semestre);
+        opcion.textContent = `${semestre}.º semestre (${plantillas.filter(p => p.semestre === semestre).length} ramos)`;
+        filtro.appendChild(opcion);
+    }
+    if (plantillas.some(p => !Number.isInteger(p.semestre))) {
+        const opcion = document.createElement('option');
+        opcion.value = 'sin-asignar';
+        opcion.textContent = `Sin asignar (${plantillas.filter(p => !Number.isInteger(p.semestre)).length} ramos)`;
+        filtro.appendChild(opcion);
+    }
+    filtro.value = [...filtro.options].some(o => o.value === semestreAnterior) ? semestreAnterior : 'todos';
+    sel.innerHTML = '<option value="">Seleccionar ramo...</option>';
+    plantillas.filter(p => filtro.value === 'todos' || (filtro.value === 'sin-asignar' ? !Number.isInteger(p.semestre) : p.semestre === Number(filtro.value))).forEach(p => {
         const o = document.createElement('option');
-        o.value = p.id; o.textContent = p.nombre;
+        o.value = p.id;
+        const nombre = formatearNombreRamo(p);
+        o.textContent = filtro.value === 'todos' ? `${nombre} · ${p.semestre ? `${p.semestre}.º semestre` : 'Sin asignar'}` : nombre;
         sel.appendChild(o);
     });
-    sel.disabled = false;
-    // Mantener selección si sigue existiendo
-    if (prevVal) sel.value = prevVal;
+    sel.disabled = !sesion.usuarioId;
+    if (prevVal && [...sel.options].some(o => o.value === prevVal)) sel.value = prevVal;
+    else if (sesion.plantillaId) {
+        sesion.plantillaId = null;
+        sesion.plantilla = null;
+        resetUI();
+    }
 }
+
+$('#semestreSelect').addEventListener('change', cargarSelectPlantillas);
 
 $('#plantillaSelect').addEventListener('change', async () => {
     const id = parseInt($('#plantillaSelect').value);
@@ -170,8 +196,8 @@ async function renderListaRamos() {
         row.className = 'ramo-list-item';
         row.innerHTML = `
             <div class="ramo-list-nombre">
-                <strong>${p.nombre}</strong>
-                <span class="help-text">${p.componentes.length} componentes · ${p.componentes.reduce((s,c)=>s+c.subs.length,0)} evaluaciones${p.umbralEximen != null ? ` · umbral ${p.umbralEximen}` : ''}${p.examenObligatorio ? ' · 🔒 examen obligatorio' : ''}</span>
+                <strong>${escaparHtml(formatearNombreRamo(p))}</strong>
+                <span class="help-text">${p.semestre ? `${p.semestre}.º semestre` : 'Sin semestre asignado'} · ${p.componentes.length} componentes · ${p.componentes.reduce((s,c)=>s+c.subs.length,0)} evaluaciones${p.umbralEximen != null ? ` · umbral ${p.umbralEximen}` : ''}${p.examenObligatorio ? ' · 🔒 examen obligatorio' : ''}</span>
             </div>
             <div class="ramo-list-actions">
                 <button class="btn btn-ghost btn-sm" data-edit="${p.id}">✏ Editar</button>
@@ -234,10 +260,11 @@ async function abrirEditorPlantilla(plantillaId) {
     if (plantillaId) {
         const p = await obtenerPlantilla(plantillaId);
         editorPlantilla = {
+            ...p,
             id: p.id,
             nombre: p.nombre,
             umbralEximen:      5.5,
-            examenObligatorio: p.examenObligatorio ?? false,
+            examenObligatorio: p.examenObligatorio,
             componentes: JSON.parse(JSON.stringify(p.componentes)) // deep copy
         };
     } else {
@@ -276,7 +303,12 @@ async function abrirEditorPlantilla(plantillaId) {
     }
 
     $('#inputNombreRamo').value = editorPlantilla.nombre;
-    $('#editExamenObligatorio').checked = editorPlantilla.examenObligatorio;
+    $('#avisoRevisionPonderaciones').hidden = !editorPlantilla.requiereRevisionPonderaciones;
+    $('#confirmarPonderaciones').checked = false;
+    $('#inputCodigoRamo').value = editorPlantilla.codigo || '';
+    $('#inputRequisitoRamo').value = editorPlantilla.requisito || '';
+    $('#inputSemestreRamo').value = editorPlantilla.semestre ?? ($('#semestreSelect').value.match(/^\d+$/) ? $('#semestreSelect').value : '');
+    $('#editReglaExamen').value = editorPlantilla.examenObligatorio === null ? 'desconocido' : editorPlantilla.examenObligatorio ? 'obligatorio' : 'eximible';
     renderEditorCompleto();
     openModal('modalEditarRamo');
 }
@@ -298,7 +330,7 @@ function renderComponenteEditor(container, comp, ci) {
         <div class="comp-editor-header">
             <div class="comp-editor-title-row">
                 <input type="text" class="input input-sm comp-label"
-                    value="${comp.label}" placeholder="Nombre componente">
+                    value="${escaparHtml(comp.label)}" placeholder="Nombre componente">
                 <div class="peso-input-wrap">
                     <span class="peso-label">Peso:</span>
                     <input type="number" class="input input-sm comp-peso"
@@ -308,6 +340,8 @@ function renderComponenteEditor(container, comp, ci) {
             </div>
             <button class="btn btn-danger-ghost btn-sm comp-del" ${editorPlantilla.componentes.length <= 1 ? 'disabled' : ''}>✕ Eliminar componente</button>
         </div>
+
+        ${comp.reglaRecuperativa === 'reemplazaMenor' ? '<p class="help-text">La recuperativa reemplaza la nota más baja cuando la mejora.</p>' : ''}
 
         <div class="subs-list">
             ${comp.subs.map((sub, si) => renderSubRow(ci, si, sub)).join('')}
@@ -406,8 +440,8 @@ function renderComponenteEditor(container, comp, ci) {
 function renderSubRow(ci, si, sub) {
     return `
         <div class="sub-row">
-            <input type="text" class="input input-sm sub-nombre" value="${sub.nombre}" placeholder="Nombre evaluación">
-            <input type="text" class="input input-sm sub-contenido" value="${(sub.contenido || '').replace(/"/g, '&quot;')}" placeholder="Temas / contenido" title="Temas o cronograma de la evaluación">
+            <input type="text" class="input input-sm sub-nombre" value="${escaparHtml(sub.nombre)}" placeholder="Nombre evaluación">
+            <input type="text" class="input input-sm sub-contenido" value="${escaparHtml(sub.contenido)}" placeholder="Temas / contenido" title="Temas o cronograma de la evaluación">
             <input type="date" class="input input-sm sub-fecha" value="${sub.fecha || ''}" title="Fecha de la evaluación">
             <div class="peso-input-wrap">
                 <input type="number" class="input input-sm input-pct sub-pct"
@@ -473,6 +507,10 @@ $('#btnGuardarPlantilla').addEventListener('click', async () => {
     const nombre = $('#inputNombreRamo').value.trim();
     if (!nombre) { toast('Ingresa un nombre para el ramo', 'error'); return; }
 
+    const semestreTexto = $('#inputSemestreRamo').value;
+    const semestre = semestreTexto === '' ? null : Number(semestreTexto);
+    if (semestre !== null && (!Number.isInteger(semestre) || semestre < 1)) { toast('Ingresa un semestre válido', 'error'); return; }
+
     // Validar pesos de componentes
     if (!validarPesosComponentes(editorPlantilla.componentes)) {
         toast('Los pesos de los componentes deben sumar 100%', 'error'); return;
@@ -490,9 +528,13 @@ $('#btnGuardarPlantilla').addEventListener('click', async () => {
 
     editorPlantilla.nombre            = nombre;
     editorPlantilla.umbralEximen      = 5.5;
-    editorPlantilla.examenObligatorio = $('#editExamenObligatorio').checked;
+    editorPlantilla.examenObligatorio = $('#editReglaExamen').value === 'desconocido' ? null : $('#editReglaExamen').value === 'obligatorio';
     const payload = {
         nombre:            editorPlantilla.nombre,
+        codigo:            $('#inputCodigoRamo').value.trim().toUpperCase().replace(/[-\s]/g, '') || null,
+        requisito:         $('#inputRequisitoRamo').value.trim() || null,
+        requiereRevisionPonderaciones: !!editorPlantilla.requiereRevisionPonderaciones && !$('#confirmarPonderaciones').checked,
+        semestre,
         componentes:       editorPlantilla.componentes,
         umbralEximen:      editorPlantilla.umbralEximen,
         examenObligatorio: editorPlantilla.examenObligatorio
@@ -500,7 +542,7 @@ $('#btnGuardarPlantilla').addEventListener('click', async () => {
 
     try {
         if (editorPlantilla.id) {
-            await actualizarPlantilla({ ...payload, id: editorPlantilla.id, fechaCreacion: sesion.plantilla?.fechaCreacion });
+            await actualizarPlantilla({ ...editorPlantilla, ...payload });
             toast(`Ramo "${nombre}" actualizado`, 'success');
             // Recargar si es el ramo activo
             if (sesion.plantillaId === editorPlantilla.id) {
@@ -509,6 +551,9 @@ $('#btnGuardarPlantilla').addEventListener('click', async () => {
             }
         } else {
             await crearPlantilla(nombre, editorPlantilla.componentes, {
+                codigo: payload.codigo,
+                requisito: payload.requisito,
+                semestre,
                 umbralEximen:      editorPlantilla.umbralEximen,
                 examenObligatorio: editorPlantilla.examenObligatorio
             });
@@ -530,10 +575,22 @@ async function mostrarNotas() {
     const notasAlumno = await obtenerNotasPorUsuarioPlantilla(usuarioId, plantillaId);
 
     // Badges
-    $('#ramoNombreBadge').textContent  = plantilla.nombre;
-    const usuarios = await obtenerUsuarios();
-    const u = usuarios.find(u => u.id === usuarioId);
-    $('#alumnoNombreBadge').textContent = u ? u.nombre : '';
+    $('#ramoNombreBadge').textContent = formatearNombreRamo(plantilla);
+    $('#ramoNombreBadge').title = formatearNombreRamo(plantilla);
+    const plantillas = await obtenerPlantillas();
+    if (sesion.usuarioId !== usuarioId || sesion.plantillaId !== plantillaId) return;
+    const destinos = obtenerDependientes(codigoDePlantilla(plantilla), plantillas);
+    const futuros = $('#requisitosFuturos');
+    futuros.replaceChildren();
+    for (const { destino, relacion } of destinos) {
+        const linea = document.createElement('span');
+        linea.className = 'badge badge-siguiente';
+        const semestre = destino.semestre ? `${destino.semestre}.° sem.` : 'Semestre sin asignar';
+        linea.textContent = `${semestre} · ${formatearNombreRamo(destino)}${relacion.obligatorio ? '' : ' · Alternativa'}`;
+        linea.title = `${relacion.obligatorio ? 'Necesario para' : 'Alternativa para'}: ${semestre} · ${formatearNombreRamo(destino)}`;
+        futuros.appendChild(linea);
+    }
+    futuros.hidden = destinos.length === 0;
 
     renderizarTabla(plantilla, notasAlumno);
     actualizarResumen(plantilla, notasAlumno);
@@ -583,8 +640,9 @@ function renderizarTabla(plantilla, notasAlumno) {
                 tdComp.className = 'td-componente';
                 tdComp.innerHTML = `
                     <div class="comp-badge" style="--comp-color:${KEY_COLORS[comp.key] || comp.color || COMP_COLORS[0]}">
-                        <span class="comp-badge-label">${comp.label.toUpperCase()}</span>
+                        <span class="comp-badge-label">${escaparHtml(comp.label.toUpperCase())}</span>
                         <span class="comp-badge-peso">${comp.peso}%</span>
+                        ${comp.reglaRecuperativa === 'reemplazaMenor' ? '<span class="comp-badge-peso">Recuperativa reemplaza la menor</span>' : ''}
                     </div>
                 `;
                 tr.appendChild(tdComp);
@@ -792,9 +850,8 @@ function actualizarHintsEximen(plantilla, notasAlumno) {
             hint.textContent = '✓ libre';
             hint.className   = 'exim-hint exim-hint--ok';
         } else {
-            // Capamos en 7.0: si es imposible igual mostramos 7.0 como meta máxima
-            const target = Math.min(Math.ceil(min * 10) / 10, 7.0);
-            hint.textContent = `≥ ${target.toFixed(1)}`;
+            const target = Math.ceil(min * 10) / 10;
+            hint.textContent = min > 7.0 ? 'Imposible' : `≥ ${target.toFixed(1)}`;
             hint.className   = min > 7.0 ? 'exim-hint exim-hint--impossible' : 'exim-hint';
         }
     });
@@ -854,7 +911,9 @@ function actualizarResumen(plantilla, notasAlumno) {
     const umbralEfectivo = 5.5;
     const nf             = calcularNotaFinal(plantilla, notasAlumno, umbralEfectivo);
     const exime          = determinarEximen(plantilla, notasAlumno, umbralEfectivo);
-    const estado = determinarEstado(nf);
+    const parcialesCompletos = componentesCompletos(plantilla.componentes.filter(c => c.key !== 'EXAMEN'), notasAlumno);
+    const estado = nf === null && notasAlumno.some(n => n.nota != null) ? 'PENDIENTE'
+        : nf !== null && (plantilla.condicionesNoCalculadas?.length || plantilla.requiereRevisionPonderaciones) ? 'REVISAR CONDICIONES' : determinarEstado(nf);
 
     // Stats dinámicos
     const statsList = $('#statsListDynamic');
@@ -867,7 +926,7 @@ function actualizarResumen(plantilla, notasAlumno) {
         row.innerHTML = `
             <span class="stat-label" style="display:flex;align-items:center;gap:6px;">
                 <span style="width:10px;height:10px;border-radius:50%;background:${KEY_COLORS[comp.key] || comp.color || COMP_COLORS[i%COMP_COLORS.length]};flex-shrink:0;"></span>
-                ${comp.label} <span style="opacity:0.5;font-size:0.78rem;">(${comp.peso}%)</span>
+                ${escaparHtml(comp.label)} <span style="opacity:0.5;font-size:0.78rem;">(${comp.peso}%)</span>
             </span>
             <span class="stat-value">${redondear(prom)}</span>
         `;
@@ -890,18 +949,33 @@ function actualizarResumen(plantilla, notasAlumno) {
 
     const rowEx = document.createElement('div');
     rowEx.className = 'stat-row';
+    const reglaDesconocida = plantilla.examenObligatorio == null;
     const exencionLabel = plantilla.examenObligatorio
         ? 'Examen obligatorio'
         : `Exención <span style="opacity:0.6;font-size:0.78rem;">(≥${umbralEfectivo})</span>`;
     rowEx.innerHTML = `
         <span class="stat-label">${exencionLabel}</span>
-        <span class="${exime ? 'badge badge-success' : (plantilla.examenObligatorio ? 'badge badge-error' : 'badge badge-warning')}">${plantilla.examenObligatorio ? '🔒 Requerido' : (exime ? '✅ Sí' : '❌ No')}</span>
+        <span class="${exime ? 'badge badge-success' : (plantilla.examenObligatorio ? 'badge badge-error' : 'badge badge-warning')}">${reglaDesconocida ? '⏳ Regla no determinada' : plantilla.requiereRevisionPonderaciones ? '⏳ Revisar ponderaciones' : plantilla.examenObligatorio ? '🔒 Requerido' : (exime ? '✅ Sí' : (parcialesCompletos ? '❌ No' : '⏳ Pendiente'))}</span>
     `;
     statsList.appendChild(rowEx);
 
+    if (plantilla.requiereRevisionPonderaciones) {
+        const aviso = document.createElement('div');
+        aviso.className = 'stat-hint-row stat-hint-danger';
+        aviso.textContent = 'El PDF contiene ponderaciones distintas. Revisa y confirma la estructura en Ramos.';
+        statsList.appendChild(aviso);
+    }
+
+    for (const condicion of plantilla.condicionesNoCalculadas || []) {
+        const aviso = document.createElement('div');
+        aviso.className = 'stat-hint-row stat-hint-danger';
+        aviso.textContent = condicion;
+        statsList.appendChild(aviso);
+    }
+
     // Nota mínima necesaria en el examen para aprobar el ramo
     const compExamen = plantilla.componentes.find(c => c.key === 'EXAMEN');
-    if (compExamen && !exime) {
+    if (compExamen && !exime && parcialesCompletos && !plantilla.requiereRevisionPonderaciones) {
         const minNota = calcularNotaMinimaExamen(plantilla, notasAlumno);
         if (minNota !== null) {
             const rowMin = document.createElement('div');

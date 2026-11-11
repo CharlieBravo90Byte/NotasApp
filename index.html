@@ -6,7 +6,7 @@
     <title>NotasApp — Gestor de Notas Universitarias</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/styles.css?v=4">
 </head>
 <body>
 
@@ -26,6 +26,9 @@
                 <button id="btnGestionarRamos" class="btn btn-ghost" title="Gestionar ramos/plantillas">
                     📘 Ramos
                 </button>
+                <button id="btnImportarPdf" class="btn btn-ghost" type="button">📄 Importar programa PDF</button>
+                <button id="btnMalla" class="btn btn-ghost" type="button">🎓 Malla</button>
+                <input id="inputPdfPrograma" type="file" accept="application/pdf,.pdf" multiple hidden>
                 <button id="btnExportarDatos" class="btn btn-ghost" title="Exportar datos del alumno">
                     ⬇ Exportar
                 </button>
@@ -48,6 +51,13 @@
                         <button id="btnNuevoUsuario" class="btn btn-accent btn-icon-only" title="Nuevo alumno">＋</button>
                         <button id="btnEliminarUsuario" class="btn btn-danger-ghost btn-icon-only" title="Eliminar alumno" disabled>✕</button>
                     </div>
+                </div>
+
+                <div class="control-group">
+                    <label for="semestreSelect">Semestre</label>
+                    <select id="semestreSelect" class="input">
+                        <option value="todos">Todos los semestres</option>
+                    </select>
                 </div>
 
                 <div class="control-group">
@@ -81,11 +91,11 @@
 
             <!-- Tabla de notas -->
             <div class="card glass">
-                <div class="card-header">
+                <div class="card-header notas-header">
                     <h2>📝 Notas</h2>
-                    <div style="display:flex;gap:8px;align-items:center;">
+                    <div class="notas-header-badges" tabindex="0" aria-label="Ramo y requisitos futuros; desplázate horizontalmente si es necesario">
                         <span id="ramoNombreBadge" class="badge badge-accent"></span>
-                        <span id="alumnoNombreBadge" class="badge" style="background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3)"></span>
+                        <div id="requisitosFuturos" class="requisitos-futuros" hidden></div>
                     </div>
                 </div>
                 <div class="tabla-wrapper">
@@ -179,21 +189,43 @@
                     <input type="text" id="inputNombreRamo" class="input" placeholder="Ej: Física I">
                 </div>
 
+                <div class="form-row">
+                    <label for="inputSemestreRamo">Semestre del ramo</label>
+                    <input type="number" id="inputSemestreRamo" class="input" min="1" step="1" placeholder="Ej: 1 (opcional)">
+                    <span class="help-text">Deja vacío para mantenerlo sin asignar.</span>
+                </div>
+                <div class="form-row">
+                    <label for="inputCodigoRamo">Código del ramo</label>
+                    <input type="text" id="inputCodigoRamo" class="input" placeholder="Ej: CVE523">
+                </div>
+                <div class="form-row">
+                    <label for="inputRequisitoRamo">Requisito según el programa</label>
+                    <input type="text" id="inputRequisitoRamo" class="input" placeholder="Ej: (CVE-421 4,0) y (CVE-221 4,0)">
+                    <span class="help-text">La malla interpreta códigos con nota mínima, paréntesis y los operadores y/o.</span>
+                </div>
+
                 <div class="form-row-split">
                     <div class="control-group">
                         <label>🎯 Umbral de exención</label>
                         <div class="input input--readonly">≥ 5.5 <span style="opacity:0.5;font-size:0.78rem;">(fijo)</span></div>
                     </div>
-                    <div class="control-group" style="align-self:center;padding-top:18px;">
-                        <label class="toggle-label">
-                            <input type="checkbox" id="editExamenObligatorio">
-                            <span>Examen siempre obligatorio (sin exención)</span>
-                        </label>
+                    <div class="control-group">
+                        <label for="editReglaExamen">Regla de examen</label>
+                        <select id="editReglaExamen" class="input">
+                            <option value="eximible">Permite exención</option>
+                            <option value="obligatorio">Examen obligatorio</option>
+                            <option value="desconocido">Pendiente de definir</option>
+                        </select>
                     </div>
                 </div>
 
                 <div class="plantilla-editor" id="plantillaEditor">
                     <!-- Se genera dinámicamente -->
+                </div>
+
+                <div id="avisoRevisionPonderaciones" class="form-row" hidden>
+                    <label class="toggle-label"><input type="checkbox" id="confirmarPonderaciones"> He revisado las evaluaciones y ponderaciones de este ramo.</label>
+                    <span class="help-text">El programa contiene más de una estructura con diferencias; revisa los valores anteriores.</span>
                 </div>
 
                 <div class="pesos-total" id="pesosCompTotal">
@@ -227,9 +259,46 @@
         </div>
     </div>
 
-    <script src="js/db.js"></script>
-    <script src="js/calculos.js"></script>
-    <script src="js/ui.js"></script>
+    <div id="modalImportacion" class="modal-overlay">
+        <div class="modal modal-lg glass">
+            <div class="modal-header">
+                <h2>Importar programas PDF</h2>
+                <button class="modal-close" data-modal="modalImportacion" aria-label="Cerrar">✕</button>
+            </div>
+            <div class="modal-body">
+                <p id="estadoImportacion" class="help-text" role="status" aria-live="polite"></p>
+                <ul id="resultadosImportacion" class="resultados-importacion"></ul>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" data-modal="modalImportacion">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalMalla" class="modal-overlay">
+        <div class="modal modal-xl glass">
+            <div class="modal-header"><h2>🎓 Malla curricular</h2><button class="modal-close" data-modal="modalMalla">✕</button></div>
+            <div class="modal-body">
+                <p class="help-text">Selecciona un alumno para ingresar notas históricas. Si un ramo tiene una nota final calculada, se usa esa nota. Los requisitos se muestran solo cuando se conocen; no reemplazan la matrícula oficial.</p>
+                <div class="malla-historial">
+                    <label for="codigoHistorial">Código fuera de la malla visible</label>
+                    <input id="codigoHistorial" class="input input-sm" placeholder="Ej: CVE421">
+                    <label for="notaHistorial">Nota final</label>
+                    <input id="notaHistorial" class="input input-sm" type="number" min="1" max="7" step="0.1" placeholder="1 a 7">
+                    <button id="guardarHistorial" class="btn btn-ghost btn-sm" type="button">Guardar nota</button>
+                    <p id="historialAdicional" class="help-text"></p>
+                </div>
+                <div id="mallaContenido" class="malla-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/db.js?v=6"></script>
+    <script src="js/calculos.js?v=6"></script>
+    <script src="js/ui.js?v=6"></script>
+    <script src="js/malla.js?v=6"></script>
+    <script src="vendor/pdfjs/pdf.min.js"></script>
+    <script src="js/importar-pdf.js?v=7"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

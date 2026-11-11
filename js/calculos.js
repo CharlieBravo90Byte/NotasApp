@@ -44,6 +44,17 @@ function calcularPromedioComponente(comp, notasAlumno) {
         return reg ? { porcentaje: sub.porcentaje || 0, nota: reg.nota } : null;
     }).filter(x => x !== null && x.nota !== null);
 
+    // Algunos programas permiten que la recuperativa sustituya la peor cátedra.
+    // Cuando hay N/P se aplica la transferencia existente y no se sustituye otra nota.
+    if (comp.reglaRecuperativa === 'reemplazaMenor' && recuperativa && pctReasignado === 0) {
+        const recuperacion = notasAlumno.find(n => n.compKey === comp.key && n.subNombre === recuperativa.nombre && n.nota > 0);
+        const ponderadas = subsConNota.filter(x => x.porcentaje > 0);
+        if (recuperacion && ponderadas.length) {
+            const peor = ponderadas.reduce((a, b) => a.nota <= b.nota ? a : b);
+            peor.nota = Math.max(peor.nota, recuperacion.nota);
+        }
+    }
+
     if (subsConNota.length === 0) return null;
 
     const pesoTotal = subsConNota.reduce((s, x) => s + x.porcentaje, 0);
@@ -77,6 +88,23 @@ function calcularPromedioParcial(plantilla, notasAlumno) {
     return sumaNotas / sumaPesos;
 }
 
+/** Todas las evaluaciones con peso deben tener nota; N/P exige recuperativa. */
+function componentesCompletos(componentes, notasAlumno) {
+    return componentes.filter(c => c.peso > 0).every(comp => {
+        const ponderadas = comp.subs.filter(s => s.porcentaje > 0);
+        if (!ponderadas.length) return false;
+        const recuperativa = comp.subs.find(s => /recuperat/i.test(s.nombre) && s.porcentaje === 0);
+        return ponderadas.every(sub => {
+            const registro = notasAlumno.find(n => n.compKey === comp.key && n.subNombre === sub.nombre);
+            if (!registro || registro.nota == null) return false;
+            if (registro.nota !== 0) return true;
+            if (!recuperativa) return false;
+            const recuperacion = notasAlumno.find(n => n.compKey === comp.key && n.subNombre === recuperativa.nombre);
+            return !!recuperacion && recuperacion.nota != null && recuperacion.nota !== 0;
+        });
+    });
+}
+
 /**
  * Determina si el alumno se exime del examen.
  * Solo se exime si:
@@ -86,19 +114,11 @@ function calcularPromedioParcial(plantilla, notasAlumno) {
  * - El promedio parcial >= 5.5
  */
 function determinarEximen(plantilla, notasAlumno, umbralFallback) {
-    if (plantilla.examenObligatorio) return false;
+    if (plantilla.examenObligatorio !== false || plantilla.requiereRevisionPonderaciones) return false;
     const umbral = 5.5;
     const parcialesComps = plantilla.componentes.filter(c => c.key !== 'EXAMEN');
 
-    // Verificar que todos los componentes parciales con subs ponderadas tengan al menos una nota
-    for (const comp of parcialesComps) {
-        const subsConPeso = comp.subs.filter(s => (s.porcentaje || 0) > 0);
-        if (subsConPeso.length === 0) continue; // componente sin subs ponderadas, ignorar
-        const tieneAlgunaNota = subsConPeso.some(sub =>
-            notasAlumno.find(n => n.compKey === comp.key && n.subNombre === sub.nombre && n.nota != null)
-        );
-        if (!tieneAlgunaNota) return false; // falta al menos un componente completo
-    }
+    if (!parcialesComps.some(c => c.peso > 0) || !componentesCompletos(parcialesComps, notasAlumno)) return false;
 
     const pp = calcularPromedioParcial(plantilla, notasAlumno);
     if (pp === null) return false;
@@ -117,6 +137,10 @@ function calcularNotaFinal(plantilla, notasAlumno, umbralFallback) {
 
     const exime = determinarEximen(plantilla, notasAlumno, umbralFallback);
     const parcialesComps = plantilla.componentes.filter(c => c.key !== 'EXAMEN');
+
+    if (!componentesCompletos(parcialesComps, notasAlumno)) return null;
+    if (compExamen && compExamen.peso > 0 && plantilla.examenObligatorio == null && notaExamen === null) return null;
+    if (compExamen && compExamen.peso > 0 && !exime && !componentesCompletos([compExamen], notasAlumno)) return null;
 
     // Verificar si hay al menos una nota parcial
     let hayParcial = false;
@@ -186,7 +210,7 @@ function validarPesosComponentes(componentes) {
  */
 function calcularNotaParaEximirseEnSub(plantilla, notasAlumno, targetCompKey, targetSubNombre) {
     const UMBRAL = 5.5;
-    if (plantilla.examenObligatorio) return null;
+    if (plantilla.examenObligatorio !== false || plantilla.requiereRevisionPonderaciones || notasAlumno.some(n => n.nota === 0) || plantilla.componentes.some(c => c.reglaRecuperativa)) return null;
     const parcialesComps = plantilla.componentes.filter(c => c.key !== 'EXAMEN');
 
     let sumaFixed = 0, pesoFixed = 0, targetComp = null;

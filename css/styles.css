@@ -423,6 +423,18 @@ select.input {
     color: var(--accent-hover);
 }
 
+.badge-siguiente {
+    background: #e8edff;
+    color: #3730a3;
+}
+
+.resultados-importacion { list-style: none; margin-top: 12px; display: grid; gap: 8px; }
+.resultados-importacion li { padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow-wrap: anywhere; }
+.resultados-importacion strong { display: block; }
+.resultados-importacion .resultado-error { border-color: var(--danger); }
+#modalImportacion .modal { max-width: 620px; max-height: 88vh; display: flex; flex-direction: column; }
+#modalImportacion .modal-body { min-height: 0; overflow-y: auto; }
+
 /* --- Tabla --- */
 .tabla-wrapper {
     overflow-x: auto;
@@ -878,10 +890,27 @@ select.input {
 
 /* --- Notas Section --- */
 .notas-section {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
     animation: fadeUp 0.4s ease-out;
+}
+
+.notas-section > .card { min-width: 0; align-self: start; }
+.notas-header { flex-wrap: nowrap; gap: 10px; }
+.notas-header h2 { flex: 0 0 auto; white-space: nowrap; }
+.notas-header-badges { display: flex; flex: 1 1 auto; flex-wrap: nowrap; align-items: center; gap: 8px; min-width: 0; height: 28px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.notas-header-badges::-webkit-scrollbar { display: none; }
+.notas-header-badges::before { content: ''; margin-left: auto; }
+.notas-header-badges .badge { display: inline-flex; flex: 0 0 auto; align-items: center; height: 28px; font-size: .78rem; font-weight: 600; line-height: 1; text-transform: uppercase; white-space: nowrap; }
+.requisitos-futuros { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
+.dashboard-grid { margin-top: 0; }
+
+@media (min-width: 1100px) {
+    .notas-section { grid-template-columns: minmax(0, 1fr) 280px; align-items: start; }
+    .notas-section .dashboard-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; position: sticky; top: 100px; }
+    .notas-section .tabla-notas { min-width: 760px; }
+    .notas-section .tabla-notas th, .notas-section .tabla-notas td { padding-left: 9px; padding-right: 9px; }
 }
 
 /* --- Animations --- */
@@ -1058,6 +1087,18 @@ select.input {
 }
 
 /* Form row en modal */
+[hidden] { display: none !important; }
+
+.malla-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.malla-historial { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+.malla-historial .input { max-width: 140px; }
+.malla-historial p { flex-basis: 100%; }
+.malla-semestre { padding: 12px; border-radius: 10px; background: var(--bg, #f8fafc); }
+.malla-semestre h3 { margin: 0 0 10px; font-size: 1rem; }
+.malla-ramo { background: white; border: 1px solid var(--border, #e5e7eb); border-radius: 8px; padding: 10px; margin-bottom: 9px; }
+.malla-ramo strong { display: block; font-size: .9rem; }
+.malla-requisito { margin: 6px 0; font-size: .78rem; overflow-wrap: anywhere; }
+
 .form-row {
     display: flex;
     flex-direction: column;

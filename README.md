@@ -12,13 +12,16 @@ Calcula promedios, exención de examen y nota mínima necesaria — todo guardad
 
 ## ¿Qué hace?
 
+- **Ramos por semestre** — asigna un número de semestre al crear o editar cada ramo y filtra la lista principal. Los ramos anteriores quedan en «Sin asignar». No hay un límite de ramos por semestre.
+- **Importa uno o varios programas PDF UDLA** — extrae localmente la tabla 7.1, los requisitos y los resultados de aprendizaje disponibles, y muestra el resultado de cada archivo. Los ramos existentes no se duplican; se completan los requisitos y la regla de examen si estaban pendientes, y se avisa de condiciones detectadas que la app aún no calcula. No se suben los archivos a un servidor.
+- **Malla y requisitos** — muestra los ramos de la imagen por semestre y evalúa los requisitos conocidos con las notas finales o las notas históricas del alumno. Si faltan requisitos o notas, muestra que no puede determinar el resultado.
 - **Gestiona alumnos** — cada persona tiene su espacio de notas separado, con opción de eliminar.
 - **Plantillas de ramos dinámicas** — define cualquier estructura de evaluación con componentes y sub-evaluaciones personalizados.
 - **Calcula automáticamente** (con 2 decimales):
   - Promedio ponderado de cada componente (con su peso %)
   - Promedio parcial combinado (sin examen)
   - Nota final ponderada según los pesos de la plantilla
-  - Exención del examen (**umbral fijo ≥ 5.5**), solo cuando todos los componentes parciales tienen al menos una nota
+  - Exención del examen (**umbral fijo ≥ 5.5**), solo cuando todas las evaluaciones parciales ponderadas tienen nota (o recuperativa resuelta)
   - Nota mínima necesaria en el examen para aprobar el ramo (≥ 4.0)
   - Estado: **APROBADO / REPROBADO**
 - **Simulador de exención por nota** — en cada evaluación vacía muestra la nota mínima que necesitas ahí para que, asumiendo 5.5 en el resto, alcances la exención. Se actualiza en tiempo real al tipear.
@@ -46,7 +49,11 @@ python -m http.server 8080
 npx serve .
 ```
 
-> No hay `npm install`, no hay base de datos externa, no hay dependencias locales.
+> No hay que ejecutar `npm install` ni configurar una base de datos externa; PDF.js se incluye con la aplicación.
+
+Para importar PDF usa el servidor local; la lectura de PDF incluye PDF.js en `vendor/pdfjs`. Se admiten los programas UDLA con texto seleccionable y tablas compatibles; los PDF escaneados requieren revisión manual. Si existen varias tablas, se importa la primera estructura completa sin combinar sus filas; se informa si hay diferencias. Si cambian las evaluaciones obligatorias o los pesos, el resultado queda pendiente de revisión hasta confirmar la estructura en Ramos. La lectura puede omitir aprendizajes divididos entre líneas. Si la regla de examen no se identifica, queda pendiente y puede editarse en Ramos. La app utiliza un umbral fijo de exención de 5,5 y no calcula requisitos de asistencia. La malla incorpora requisitos solo de los programas disponibles, no deduce dependencias por semestre ni sustituye la matrícula oficial. Las notas históricas se guardan por alumno en el navegador y se incluyen al exportar sus datos.
+
+Para verificar los ejemplos y el procesamiento por lotes: `node tests/importar-pdf.test.cjs` y `node tests/importar-lote.test.cjs`.
 
 ---
 
@@ -82,7 +89,7 @@ Debajo de cada campo de nota vacío aparece un hint con la nota mínima necesari
 |---|---|
 | Nota alcanzable (≤ 7.0) | 🟠 `≥ 5.8` |
 | Con cualquier nota alcanza | 🟢 `✓ libre` |
-| Solo con nota > 7.0 | 🔴 `≥ 7.0` (límite visible) |
+| Solo con nota > 7.0 | 🔴 `Imposible` |
 
 **Semántica de la fórmula:** "si el resto de notas vacías sacan justo 5.5 ¿qué necesito yo aquí para lograr la exención?"
 
@@ -93,7 +100,7 @@ Debajo de cada campo de nota vacío aparece un hint con la nota mínima necesari
 La exención solo se activa cuando:
 
 1. El ramo **no** tiene `examenObligatorio = true`
-2. **Todos** los componentes parciales (no EXAMEN) con evaluaciones ponderadas tienen al menos una nota registrada
+2. **Todas** las evaluaciones parciales ponderadas tienen nota registrada; si hay N/P, se requiere la recuperativa
 3. El promedio parcial resultante ≥ **5.5** (umbral fijo, no configurable)
 
 ---
@@ -135,7 +142,7 @@ NotasApp/
 ### `plantillas`
 ```js
 {
-  id, nombre,
+  id, nombre, semestre, // semestre opcional
   umbralEximen,        // siempre 5.5
   examenObligatorio,   // bool
   componentes: [
@@ -197,3 +204,5 @@ Chrome 90+, Firefox 88+, Edge 90+, Safari 14+
 ## Licencia
 
 Uso interno / privado — SoftKMC.
+
+La nota final y el estado quedan pendientes hasta completar los parciales y, cuando corresponda, el examen. El mínimo de examen se muestra al completar los parciales. El simulador supone 5.5 en las demás evaluaciones pendientes y se oculta si hay N/P.
