@@ -12,7 +12,7 @@ Calcula promedios, exención de examen y nota mínima necesaria — todo guardad
 
 ## ¿Qué hace?
 
-- **Ramos por semestre** — asigna un número de semestre al crear o editar cada ramo y filtra la lista principal. Los ramos anteriores quedan en «Sin asignar». No hay un límite de ramos por semestre.
+- **Ramos por semestre** — la malla incluida se carga automáticamente con sus semestres. Los programas disponibles en el proyecto aportan sus evaluaciones; los ramos sin programa quedan pendientes hasta importar el PDF o configurar su estructura. También se pueden crear y editar ramos.
 - **Importa uno o varios programas PDF UDLA** — extrae localmente la tabla 7.1, los requisitos y los resultados de aprendizaje disponibles, y muestra el resultado de cada archivo. Los ramos existentes no se duplican; se completan los requisitos y la regla de examen si estaban pendientes, y se avisa de condiciones detectadas que la app aún no calcula. No se suben los archivos a un servidor.
 - **Malla y requisitos** — muestra los ramos de la imagen por semestre y evalúa los requisitos conocidos con las notas finales o las notas históricas del alumno. Si faltan requisitos o notas, muestra que no puede determinar el resultado.
 - **Nota portal** — pega la tabla de MiUDLA, revisa las filas detectadas y guárdalas en una columna separada. Las notas de simulación siguen siendo las únicas usadas en los cálculos.
@@ -54,6 +54,8 @@ npx serve .
 Para importar PDF usa el servidor local; la lectura de PDF incluye PDF.js en `vendor/pdfjs`. Se admiten los programas UDLA con texto seleccionable y tablas compatibles; los PDF escaneados requieren revisión manual. Si existen varias tablas, se importa la primera estructura completa sin combinar sus filas; se informa si hay diferencias. Si cambian las evaluaciones obligatorias o los pesos, el resultado queda pendiente de revisión hasta confirmar la estructura en Ramos. La lectura puede omitir aprendizajes divididos entre líneas. Si la regla de examen no se identifica, queda pendiente y puede editarse en Ramos. La app utiliza un umbral fijo de exención de 5,5 y no calcula requisitos de asistencia. La malla incorpora requisitos solo de los programas disponibles, no deduce dependencias por semestre ni sustituye la matrícula oficial. Las notas históricas se guardan por alumno en el navegador.
 
 Para verificar los ejemplos y el procesamiento por lotes: `node tests/importar-pdf.test.cjs` y `node tests/importar-lote.test.cjs`.
+
+El catálogo de la malla está en `js/malla.js` y las estructuras de los PDF incluidos en `js/programas-incluidos.js`. En un dispositivo nuevo se cargan sin notas. Al abrir una base de datos existente se mantienen las evaluaciones y notas guardadas y solo se completa el código o semestre que falte. Los programas que se importen posteriormente desde la interfaz se guardan en ese navegador: para distribuirlos en dispositivos nuevos también hay que incorporarlos al proyecto.
 
 ### Instalar en un celular
 

@@ -1,7 +1,7 @@
 // Catálogo de la malla mostrada por el usuario. Los requisitos provienen solo
 // de los programas disponibles; una ausencia no significa que el ramo sea libre.
 const MALLA = [
-    [1, 'CVE211', 'Zoología'], [1, null, 'Medio ambiente y gestión ambiental'],
+    [1, 'CVE211', 'Zoología'], [1, 'CVE3317', 'Medio ambiente y gestión ambiental'],
     [1, 'CQU110', 'Química'], [1, 'CVE902', 'Formulación y evaluación de proyectos'],
     [2, 'CQU310', 'Bioquímica'], [2, 'CVE292', 'Anatomía del canino'], [2, 'AES519', 'Bioestadística'],
     [2, 'CBI329', 'Microbiología general y veterinaria'], [2, 'CVE221', 'Histoembriología'], [2, 'LCE001', 'Inglés I'],

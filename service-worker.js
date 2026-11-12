@@ -1,8 +1,8 @@
-const CACHE = 'notasapp-shell-v3';
+const CACHE = 'notasapp-shell-v5';
 const ARCHIVOS = [
     './', './index.html', './manifest.webmanifest?v=2', './icons/icon-192-v2.png', './icons/icon-512-v2.png',
-    './css/styles.css?v=8', './js/db.js?v=7', './js/calculos.js?v=6', './js/ui.js?v=9',
-    './js/malla.js?v=7', './js/importar-pdf.js?v=7', './js/portal.js?v=3', './js/app.js', './js/pwa.js',
+    './css/styles.css?v=9', './js/db.js?v=8', './js/calculos.js?v=6', './js/ui.js?v=10',
+    './js/malla.js?v=8', './js/programas-incluidos.js?v=1', './js/importar-pdf.js?v=8', './js/portal.js?v=3', './js/app.js', './js/pwa.js',
     './vendor/pdfjs/pdf.min.js', './vendor/pdfjs/pdf.worker.min.js',
     './vendor/tesseract/tesseract.min.js', './vendor/tesseract/worker.min.js',
     './vendor/tesseract/tesseract-core-lstm.wasm.js', './vendor/tesseract/tesseract-core-simd-lstm.wasm.js',

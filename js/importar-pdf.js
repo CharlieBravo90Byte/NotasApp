@@ -191,6 +191,12 @@ async function importarProgramaArchivo(archivo) {
     if (existente) {
         const cambios = {};
         const campos = [];
+        if (existente.estructuraPendiente && Array.isArray(existente.componentes) && existente.componentes.length === 0) {
+            cambios.componentes = propuesta.componentes;
+            cambios.estructuraPendiente = false;
+            cambios.requiereRevisionPonderaciones = propuesta.requiereRevisionPonderaciones;
+            campos.push('las evaluaciones');
+        }
         if (!existente.requisito && propuesta.requisito) {
             cambios.requisito = propuesta.requisito;
             cambios.codigo = existente.codigo || propuesta.codigo;

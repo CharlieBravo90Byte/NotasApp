@@ -220,7 +220,7 @@ async function eliminarNotasDeSub(plantillaId, compKey, subNombre) {
 
 // ════════════════════════════════════════
 //  SEED — Ramos predeterminados
-//  Solo se insertan si la base de datos está vacía (primera ejecución).
+//  Las estructuras conocidas se agregan sin reemplazar datos existentes.
 // ════════════════════════════════════════
 
 // Cada entrada tiene un `predKey` único e inmutable que permite
@@ -419,30 +419,54 @@ const PLANTILLAS_PREDETERMINADAS = [
 
 /** Agrega ramos predeterminados ausentes sin modificar los existentes. */
 async function seedPlantillasPredeterminadas() {
-    const existentes = await obtenerPlantillas();
+    const actuales = await obtenerPlantillas();
     let insertados = 0;
-
-    // Los ramos existentes pertenecen al usuario: nunca se modifican ni eliminan al iniciar.
-    const actuales = existentes;
-
     for (const p of PLANTILLAS_PREDETERMINADAS) {
-        const enDB = actuales.find(e => e.predKey === p.predKey);
-        if (enDB) {
+        const codigo = codigoDePlantilla(p);
+        const enDB = actuales.find(e => e.predKey === p.predKey || (codigo && codigoDePlantilla(e) === codigo));
+        if (enDB) continue;
+        const ramo = MALLA.find(r => r.codigo === codigo);
+        const registro = { ...p, codigo, semestre: ramo?.semestre ?? null, requisito: ramo?.requisito ?? null, fechaCreacion: new Date().toISOString() };
+        registro.id = await promisifyRequest(getStore('plantillas', 'readwrite').add(registro));
+        actuales.push(registro);
+        insertados++;
+    }
+    for (const ramo of MALLA) {
+        if (!ramo.codigo) continue;
+        const programa = PROGRAMAS_INCLUIDOS.find(p => p.codigo === ramo.codigo);
+        const versiones = actuales.filter(p => codigoDePlantilla(p) === ramo.codigo);
+        if (versiones.length) {
+            for (const existente of versiones) {
+                const cambios = {};
+                if (!existente.codigo) cambios.codigo = ramo.codigo;
+                if (existente.semestre == null) cambios.semestre = ramo.semestre;
+                if (programa && existente.estructuraPendiente && existente.componentes.length === 0) {
+                    cambios.componentes = programa.componentes;
+                    cambios.estructuraPendiente = false;
+                    cambios.examenObligatorio = programa.examenObligatorio;
+                    cambios.requiereRevisionPonderaciones = programa.requiereRevisionPonderaciones;
+                    cambios.condicionesNoCalculadas = programa.condicionesNoCalculadas || [];
+                    if (!existente.requisito) cambios.requisito = requisitoAplicable(ramo, programa.requisito);
+                }
+                if (Object.keys(cambios).length) {
+                    Object.assign(existente, cambios);
+                    await actualizarPlantilla(existente);
+                }
+            }
             continue;
-        } else {
-            // Insertar nueva predeterminada
-            await promisifyRequest(
-                getStore('plantillas', 'readwrite').add({
-                    nombre:            p.nombre,
-                    componentes:       p.componentes,
-                    umbralEximen:      p.umbralEximen,
-                    examenObligatorio: p.examenObligatorio,
-                    predKey:           p.predKey,
-                    fechaCreacion:     new Date().toISOString()
-                })
-            );
-            insertados++;
         }
+        const registro = {
+            nombre: programa?.nombre || ramo.nombre, codigo: ramo.codigo, semestre: ramo.semestre,
+            requisito: requisitoAplicable(ramo, programa?.requisito),
+            componentes: programa?.componentes || [], umbralEximen: 5.5,
+            examenObligatorio: programa ? programa.examenObligatorio : null,
+            condicionesNoCalculadas: programa?.condicionesNoCalculadas || [],
+            requiereRevisionPonderaciones: programa?.requiereRevisionPonderaciones || false,
+            estructuraPendiente: !programa, fechaCreacion: new Date().toISOString()
+        };
+        registro.id = await promisifyRequest(getStore('plantillas', 'readwrite').add(registro));
+        actuales.push(registro);
+        insertados++;
     }
 
     if (insertados > 0) {

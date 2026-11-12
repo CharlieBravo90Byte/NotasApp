@@ -1464,3 +1464,52 @@ select.input {
     .notas-section .stat-row { padding: 8px 10px; gap: 6px; }
     .notas-section .comp-badge { min-width: 0; }
 }
+
+/* Pantalla de teléfono: controles fáciles de tocar y evaluaciones compactas. */
+@media (max-width: 600px) {
+    .header { position: relative; }
+    .header-inner { display: block; padding: 10px 12px 12px; }
+    .logo { gap: 8px; margin-bottom: 9px; }
+    .logo-icon { width: 32px; height: 32px; font-size: 1.25rem; }
+    .logo h1 { font-size: 1.15rem; }
+    .tagline { display: none; }
+    .header-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+    .header-actions .btn { min-width: 0; min-height: 40px; padding: 7px 5px; font-size: .78rem; line-height: 1.2; white-space: normal; }
+    .main { padding: 12px; gap: 12px; }
+    .control-panel { padding: 14px; }
+    .control-row { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+    .control-group { min-width: 0; gap: 4px; }
+    .control-group:first-child { grid-column: 1 / -1; }
+    .control-group .input { min-width: 0; min-height: 42px; padding-left: 9px; font-size: 16px; }
+    .control-group .btn-icon-only { width: 42px; height: 42px; }
+    .empty-state { padding: 32px 16px; }
+    .empty-state p { margin-bottom: 18px; }
+    .card-header { padding: 14px; }
+    .notas-header-badges::before { margin-left: 0; }
+    .tabla-notas tbody tr:not(.fila-total) {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, .8fr) minmax(0, 1.2fr);
+        grid-template-areas: 'componente componente componente componente' 'evaluacion evaluacion evaluacion contenido' 'fecha fecha porcentaje final' 'nota nota nota portal';
+        gap: 4px 10px; padding: 12px;
+    }
+    .tabla-notas td.td-componente { grid-area: componente; }
+    .tabla-notas td[data-label="Evaluación"] { grid-area: evaluacion; font-weight: 600; }
+    .tabla-notas td[data-label="Contenido"] { grid-area: contenido; }
+    .tabla-notas td[data-label="Fecha"] { grid-area: fecha; }
+    .tabla-notas td[data-label="% sub"] { grid-area: porcentaje; }
+    .tabla-notas td[data-label="Nota final"] { grid-area: final; }
+    .tabla-notas td[data-label="Nota"] { grid-area: nota; }
+    .tabla-notas td[data-label="Nota portal"] { grid-area: portal; }
+    .tabla-notas td[data-label]::before { margin-bottom: 2px; font-size: .68rem; overflow-wrap: normal; }
+    .notas-section .tabla-notas td { padding: 2px 0; }
+    .input-nota { width: 68px; min-height: 38px; font-size: 16px; }
+    .btn-np { min-width: 40px; min-height: 36px; margin-left: 5px; }
+    .exim-hint { display: inline-block; padding: 0 4px; min-height: 0; }
+    .fecha-evaluacion { max-width: 100%; min-height: 38px; padding: 5px 3px; font-size: 12px; }
+    .notas-section .dashboard-grid { gap: 12px; }
+    .modal-overlay { padding: 8px; }
+    .modal, .modal-xl { width: 100%; max-height: calc(100dvh - 16px); overflow-y: auto; }
+    .modal-header, .modal-body, .modal-footer { padding: 14px; }
+    .modal-footer { flex-wrap: wrap; }
+    .modal-body .input, .modal-body textarea { font-size: 16px; }
+    .malla-historial .input { max-width: none; }
+}

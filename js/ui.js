@@ -538,6 +538,7 @@ $('#btnGuardarPlantilla').addEventListener('click', async () => {
         nrc:               nrc || null,
         requisito:         $('#inputRequisitoRamo').value.trim() || null,
         requiereRevisionPonderaciones: !!editorPlantilla.requiereRevisionPonderaciones && !$('#confirmarPonderaciones').checked,
+        estructuraPendiente: false,
         semestre,
         componentes:       editorPlantilla.componentes,
         umbralEximen:      editorPlantilla.umbralEximen,
@@ -608,6 +609,16 @@ async function mostrarNotas() {
 function renderizarTabla(plantilla, notasAlumno) {
     const tbody = $('#tablaNotas');
     tbody.innerHTML = '';
+
+    if (!plantilla.componentes.length) {
+        const fila = document.createElement('tr');
+        const celda = document.createElement('td');
+        celda.colSpan = 8;
+        celda.textContent = 'Programa pendiente: importa el PDF de este ramo o configura sus evaluaciones en Ramos para ingresar notas.';
+        fila.appendChild(celda);
+        tbody.appendChild(fila);
+        return;
+    }
 
     for (const comp of plantilla.componentes) {
         const promComp = calcularPromedioComponente(comp, notasAlumno);

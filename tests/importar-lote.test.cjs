@@ -6,7 +6,8 @@ const vm = require('node:vm');
 const registros = [
     { id: 1, codigo: 'CVE900', nombre: 'Existente', requisito: '(CVE-100 4,0)', examenObligatorio: true, componentes: ['original'] },
     { id: 2, codigo: 'CVE901', nombre: 'Sin requisito', requisito: null, examenObligatorio: null, componentes: ['conservar'] },
-    { id: 3, codigo: 'CVE904', nombre: 'Examen pendiente', requisito: '(CVE-100 4,0)', examenObligatorio: null, componentes: ['original'] }
+    { id: 3, codigo: 'CVE904', nombre: 'Examen pendiente', requisito: '(CVE-100 4,0)', examenObligatorio: null, componentes: ['original'] },
+    { id: 4, codigo: 'CVE905', nombre: 'Programa pendiente', semestre: 2, estructuraPendiente: true, examenObligatorio: null, componentes: [] }
 ];
 const context = {
     pdfjsLib: { GlobalWorkerOptions: {} },
@@ -36,11 +37,12 @@ const programa = (codigo, requisito = null) => ({ codigo, nombre: `Ramo ${codigo
         { name: 'nuevo-repetido.pdf', programa: programa('CVE902') },
         { name: 'ilegible.pdf' },
         { name: 'siguiente.pdf', programa: programa('CVE903') },
-        { name: 'regla.pdf', programa: { ...programa('CVE904', '(CVE-100 4,0)'), examenObligatorio: true, condicionesNoCalculadas: ['Revisar condición'] } }
+        { name: 'regla.pdf', programa: { ...programa('CVE904', '(CVE-100 4,0)'), examenObligatorio: true, condicionesNoCalculadas: ['Revisar condición'] } },
+        { name: 'pendiente.pdf', programa: { ...programa('CVE905'), componentes: [{ key: 'CATEDRA', subs: [] }] } }
     ];
     const avance = [];
     const resultados = await context.procesarArchivosProgramas(archivos, (r, n, total) => avance.push([r.archivo, n, total]));
-    assert.deepEqual(Array.from(resultados, r => r.estado), ['existente', 'actualizado', 'importado', 'existente', 'error', 'importado', 'actualizado']);
+    assert.deepEqual(Array.from(resultados, r => r.estado), ['existente', 'actualizado', 'importado', 'existente', 'error', 'importado', 'actualizado', 'actualizado']);
     assert.equal(avance.length, archivos.length);
     assert.equal(registros.filter(r => r.codigo === 'CVE902').length, 1);
     assert.equal(registros.find(r => r.codigo === 'CVE900').requisito, '(CVE-100 4,0)');
@@ -51,5 +53,10 @@ const programa = (codigo, requisito = null) => ({ codigo, nombre: `Ramo ${codigo
     assert.equal(registros.find(r => r.codigo === 'CVE904').examenObligatorio, true);
     assert.deepEqual(registros.find(r => r.codigo === 'CVE904').condicionesNoCalculadas, ['Revisar condición']);
     assert.ok(registros.some(r => r.codigo === 'CVE903'));
+    assert.equal(registros.filter(r => r.codigo === 'CVE905').length, 1);
+    assert.equal(registros.find(r => r.codigo === 'CVE905').id, 4);
+    assert.equal(registros.find(r => r.codigo === 'CVE905').semestre, 2);
+    assert.equal(registros.find(r => r.codigo === 'CVE905').componentes[0].key, 'CATEDRA');
+    assert.equal(registros.find(r => r.codigo === 'CVE905').estructuraPendiente, false);
     console.log('Importación por lotes: pruebas correctas');
 })().catch(error => { console.error(error); process.exitCode = 1; });
