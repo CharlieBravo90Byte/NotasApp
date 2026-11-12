@@ -27,6 +27,37 @@ assert.ok(resultado.diferencias.some(s => s.includes('peso portal 60 %, app 45 %
 assert.throws(() => app.analizarTextoPortal('Texto sin tabla', plantilla), /No se reconocieron/);
 assert.throws(() => app.analizarTextoPortal('CATEDRA 1 33.33%\n5,3', plantilla, { porLinea: true }), /No se reconocieron/);
 assert.equal(app.analizarTextoPortal('CATEDRA 1 33.33% 5,3\nCATEDRA 2 33.33% 6,9', plantilla, { porLinea: true }).filas.length, 2);
+const capturaMovil = `2306 OU 8 03% 00090
+(M miudlaintranet.udla.cl/mi: + (3) :
+GENÉTICA - NRC 7725
+Notas O
+EJERCICIO
+EJERCICIO 1 25% - 7]
+EJERCICIO 2 25% -
+EJERCICIO 3 25% - Nota Final
+EJERCICIO 4 25% - |
+CATEDRA
+CATEDRA 33.33% -
+RECUPERATIVA o
+% Nota Final
+CATEDRA 1 33.33% 5,3
+CATEDRA 2 33.33% 6,9
+Nota Final
+CATEDRA 3 33.33% - lo]
+CATEDRA 0% -
+DIAGNOSTICO`;
+const movil = app.analizarTextoPortal(capturaMovil, plantilla, { porLinea: true });
+assert.equal(movil.filas.length, 9);
+assert.equal(movil.filas.find(f => f.subNombre === 'CATEDRA 1').notaPortal, 5.3);
+assert.equal(movil.filas.find(f => f.subNombre === 'CATEDRA 2').notaPortal, 6.9);
+assert.equal(movil.filas.find(f => f.subNombre === 'CATEDRA 3').notaPortal, null);
+assert.equal(movil.filas.find(f => f.subNombre === 'CATEDRA RECUPERATIVA').porcentajePortal, 33.33);
+assert.ok(movil.recuperativas.some(s => s.includes('toma el peso de la evaluación marcada N/P')));
+assert.equal(movil.filas.find(f => f.subNombre === 'CATEDRA DIAGNOSTICO').porcentajePortal, 0);
+assert.ok(movil.noEncontradas.some(f => f.includes('EXAMEN')));
+assert.throws(() => app.analizarTextoPortal('CATEDRA 33.33% -', plantilla, { porLinea: true }), /No se reconocieron/);
+assert.equal(app.analizarTextoPortal('CATEDRA 3 33.33% -\nCATEDRA 3 33.33% - ruido', plantilla, { porLinea: true }).filas.length, 1);
+assert.throws(() => app.analizarTextoPortal('CATEDRA 3 33.33% 5,3\nCATEDRA 3 33.33% 6,9', plantilla, { porLinea: true }), /más de una vez con datos distintos/);
 assert.equal(app.unirTextoCapturas(['CATEDRA 1 33% 5,3\nCATEDRA 2 33% 6,9', 'CATEDRA 2 33% 6,9\nCATEDRA 3 33% -']), 'CATEDRA 1 33% 5,3\nCATEDRA 2 33% 6,9\nCATEDRA 3 33% -');
 assert.throws(() => app.analizarTextoPortal('CATEDRA 1 33.33% 5,3 CATEDRA 1 33.33% 6,9', plantilla), /más de una vez/);
 const conSaltos = app.analizarTextoPortal('Cátedra 1\t33,33%\t5,3\nCátedra 2\t33,33%\tN/P', plantilla);
@@ -57,6 +88,15 @@ const bd = { stub: database, setTimeout, queueMicrotask, Date };
 vm.createContext(bd);
 vm.runInContext(leer('js/db.js') + '\ndb = stub;', bd);
 vm.runInContext(leer('js/calculos.js'), bd);
+const catedra = plantilla.componentes.find(c => c.key === 'CATEDRA');
+const registro = (subNombre, nota) => ({ compKey: 'CATEDRA', subNombre, nota });
+const recup = registro('CATEDRA RECUPERATIVA', 4.5);
+const catedrasNP = [registro('CATEDRA 1', 5.3), registro('CATEDRA 2', 0), registro('CATEDRA 3', 6.9)];
+assert.equal(bd.componentesCompletos([catedra], catedrasNP), false);
+assert.equal(bd.componentesCompletos([catedra], [...catedrasNP, recup]), true);
+assert.ok(Math.abs(bd.calcularPromedioComponente(catedra, [...catedrasNP, recup]) - (5.3 + 4.5 + 6.9) / 3) < 1e-9);
+assert.equal(bd.calcularPromedioComponente(catedra, [recup]), null);
+assert.ok(Math.abs(bd.calcularPromedioComponente(catedra, [registro('CATEDRA 1', 5.3), registro('CATEDRA 2', 6.9), registro('CATEDRA 3', 5), recup]) - (5.3 + 6.9 + 5) / 3) < 1e-9);
 (async () => {
     await bd.guardarNota(1, 2, 'CATEDRA', 'CATEDRA 1', 6.1);
     assert.equal(registros[0].notaPortal, 5.3);

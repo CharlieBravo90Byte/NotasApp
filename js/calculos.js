@@ -42,7 +42,7 @@ function calcularPromedioComponente(comp, notasAlumno) {
         const esNP = notasAlumno.find(n => n.compKey === comp.key && n.subNombre === sub.nombre && n.nota === NP_VALUE);
         if (esNP) return null;
         return reg ? { porcentaje: sub.porcentaje || 0, nota: reg.nota } : null;
-    }).filter(x => x !== null && x.nota !== null);
+    }).filter(x => x !== null && x.nota !== null && x.porcentaje > 0);
 
     // Algunos programas permiten que la recuperativa sustituya la peor cátedra.
     // Cuando hay N/P se aplica la transferencia existente y no se sustituye otra nota.
@@ -58,10 +58,7 @@ function calcularPromedioComponente(comp, notasAlumno) {
     if (subsConNota.length === 0) return null;
 
     const pesoTotal = subsConNota.reduce((s, x) => s + x.porcentaje, 0);
-    if (pesoTotal > 0) {
-        return subsConNota.reduce((s, x) => s + x.nota * x.porcentaje, 0) / pesoTotal;
-    }
-    return subsConNota.reduce((s, x) => s + x.nota, 0) / subsConNota.length;
+    return subsConNota.reduce((s, x) => s + x.nota * x.porcentaje, 0) / pesoTotal;
 }
 
 /**

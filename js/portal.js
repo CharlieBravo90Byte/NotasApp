@@ -4,11 +4,26 @@ function normalizarEvaluacionPortal(valor) {
         .toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
 }
 
+// En la vista móvil, MiUDLA puede partir el nombre y dejar el porcentaje
+// antes de la segunda línea (por ejemplo, CATEDRA / RECUPERATIVA).
+function reconstruirFilasCaptura(texto) {
+    const lineas = texto.split(/\r?\n/);
+    for (let i = 0; i + 1 < lineas.length; i++) {
+        const primera = lineas[i].match(/^\s*(CATEDRA)\s+(\d{1,3}(?:[.,]\d{1,2})?\s*%\s*(?:N\s*\/\s*P|[-–—]+|[1-7](?:[.,]\d{1,2})?(?![\d.,])))(?:\s.*)?$/);
+        const segunda = lineas[i + 1].match(/^\s*(RECUPERATIVA|DIAGNOSTICO)(?=\s|$)/);
+        if (!primera || !segunda) continue;
+        lineas[i] = `${primera[1]} ${segunda[1]} ${primera[2]}`;
+        lineas[i + 1] = lineas[i + 1].slice(segunda[0].length);
+    }
+    return lineas.join('\n');
+}
+
 function analizarTextoPortal(texto, plantilla, configuracion = {}) {
-    const fuente = String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
+    let fuente = String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
         .replace(/\[[^\]]*\]\(https?:\/\/[^)]*\)/gi, ' ')
-        .replace(/\*+/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '')
-        .replace(configuracion.porLinea ? /[^\S\r\n]+/g : /\s+/g, ' ')
+        .replace(/\*+/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '');
+    if (configuracion.porLinea) fuente = reconstruirFilasCaptura(fuente);
+    fuente = fuente.replace(configuracion.porLinea ? /[^\S\r\n]+/g : /\s+/g, ' ')
         .replace(configuracion.porLinea ? /\r?\n/g : /\u0000/g, '\u0000');
     const nombres = new Map();
     for (const comp of plantilla.componentes) for (const sub of comp.subs) {
@@ -21,7 +36,7 @@ function analizarTextoPortal(texto, plantilla, configuracion = {}) {
     const escapar = valor => valor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const opciones = [...nombres.keys()].sort((a, b) => b.length - a.length)
         .map(nombre => nombre.split(' ').map(escapar).join('\\s*'));
-    const sufijo = '\\s*(\\d{1,3}(?:[.,]\\d{1,2})?)\\s*%\\s*(N\\s*\\/\\s*P|[-–—]+|[1-7](?:[.,]\\d{1,2})?(?![\\d.,]))';
+    const sufijo = (configuracion.porLinea ? '\\s+' : '\\s*') + '(\\d{1,3}(?:[.,]\\d{1,2})?)\\s*%\\s*(N\\s*\\/\\s*P|[-–—]+|[1-7](?:[.,]\\d{1,2})?(?![\\d.,]))';
     const patron = new RegExp(`(${opciones.join('|')})${sufijo}`, 'g');
     const patronesIndividuales = opciones.map(opcion => new RegExp(`^${opcion}${sufijo}`));
     const filas = [], encontradas = new Set(), ambiguas = [];
@@ -40,23 +55,33 @@ function analizarTextoPortal(texto, plantilla, configuracion = {}) {
         if (!opcionesSub || opcionesSub.length !== 1) { ambiguas.push(match[1]); continue; }
         const { comp, sub } = opcionesSub[0];
         const id = `${comp.key}\u0000${sub.nombre}`;
-        if (encontradas.has(id)) throw new Error(`La evaluación ${sub.nombre} aparece más de una vez. Copia la tabla de un solo ramo.`);
         const porcentaje = Number(match[2].replace(',', '.'));
         if (porcentaje > 100) throw new Error(`No se pudo interpretar el porcentaje de ${sub.nombre}.`);
         const valor = match[3].replace(/\s/g, '');
         if (/^N\/P$/.test(valor)) { ambiguas.push(`${sub.nombre}: N/P debe revisarse manualmente`); continue; }
         const nota = /^[-–—]+$/.test(valor) ? null : Number(valor.replace(',', '.'));
         if (nota !== null && (!Number.isFinite(nota) || nota < 1 || nota > 7)) throw new Error(`La nota de ${sub.nombre} no está entre 1 y 7.`);
+        if (encontradas.has(id)) {
+            const anterior = filas.find(f => f.compKey === comp.key && f.subNombre === sub.nombre);
+            if (configuracion.porLinea && anterior.notaPortal === nota && anterior.porcentajePortal === porcentaje) continue;
+            throw new Error(`La evaluación ${sub.nombre} aparece más de una vez con datos distintos. Revisa que las capturas sean del mismo ramo y período.`);
+        }
         encontradas.add(id);
         filas.push({ compKey: comp.key, compLabel: comp.label, subNombre: sub.nombre, notaPortal: nota,
             porcentajePortal: porcentaje, porcentajeApp: Number(sub.porcentaje) || 0, inicio: match.index, fin: patron.lastIndex });
     }
     if (!filas.length) throw new Error('No se reconocieron evaluaciones. Copia la tabla completa de notas del ramo seleccionado.');
 
-    const diferencias = [];
+    const diferencias = [], recuperativas = [];
     for (const fila of filas) {
         if (Math.abs(fila.porcentajePortal - fila.porcentajeApp) > 0.02) {
-            diferencias.push(`${fila.subNombre}: portal ${fila.porcentajePortal} %, app ${fila.porcentajeApp} %`);
+            if (/recuperat/i.test(fila.subNombre) && fila.porcentajeApp === 0) {
+                const componente = plantilla.componentes.find(c => c.key === fila.compKey);
+                const regla = componente?.reglaRecuperativa === 'reemplazaMenor'
+                    ? 'se usa para N/P o, si aplica, para reemplazar la nota menor'
+                    : 'toma el peso de la evaluación marcada N/P';
+                recuperativas.push(`${fila.subNombre}: el portal muestra ${fila.porcentajePortal} %; en la app ${regla}, sin sumarse como otra evaluación.`);
+            } else diferencias.push(`${fila.subNombre}: portal ${fila.porcentajePortal} %, app ${fila.porcentajeApp} %`);
         }
     }
     for (const comp of plantilla.componentes) {
@@ -75,7 +100,7 @@ function analizarTextoPortal(texto, plantilla, configuracion = {}) {
     for (const comp of plantilla.componentes) for (const sub of comp.subs) {
         if (!encontradas.has(`${comp.key}\u0000${sub.nombre}`)) noEncontradas.push(`${comp.label}: ${sub.nombre}`);
     }
-    return { filas, noEncontradas, ambiguas, diferencias };
+    return { filas, noEncontradas, ambiguas, diferencias, recuperativas };
 }
 
 let previsualizacionPortal = null;
@@ -175,6 +200,7 @@ $('#btnAnalizarPortal').addEventListener('click', () => {
         panel.appendChild(lista);
         const mensajes = [];
         if (resultado.diferencias.length) mensajes.push(`Porcentajes diferentes (la app no los cambiará): ${resultado.diferencias.join('; ')}.`);
+        if (resultado.recuperativas.length) mensajes.push(...resultado.recuperativas);
         if (resultado.noEncontradas.length) mensajes.push(`Evaluaciones de la app no reconocidas en el texto: ${resultado.noEncontradas.join('; ')}. No se modificarán.`);
         if (resultado.ambiguas.length) mensajes.push(`Datos sin interpretar: ${resultado.ambiguas.join('; ')}. No se modificarán.`);
         mensajes.push('Solo se guardarán las filas de esta vista previa. Confirma que el texto pertenece al alumno y ramo indicados.');

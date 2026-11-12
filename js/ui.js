@@ -770,6 +770,8 @@ function renderizarTabla(plantilla, notasAlumno) {
             if (comp.key !== 'EXAMEN' && (sub.porcentaje || 0) > 0 && !esRecup) {
                 const npBtn = document.createElement('button');
                 npBtn.className = 'btn-np' + (esNP ? ' btn-np--active' : '');
+                npBtn.dataset.compKey = comp.key;
+                npBtn.dataset.subNombre = sub.nombre;
                 npBtn.title = esNP ? 'Quitar N/P' : 'Marcar N/P';
                 npBtn.textContent = esNP ? '↩' : 'N/P';
                 npBtn.addEventListener('click', async () => {
@@ -829,31 +831,10 @@ function leerNotasDesdeDOM() {
     });
     // Subs marcadas como N/P (botón activo)
     $('#tablaNotas').querySelectorAll('.btn-np--active').forEach(btn => {
-        const tr = btn.closest('tr');
-        const inp = tr?.querySelector('.input-nota');
-        if (inp) {
-            // Ya está incluido arriba, reemplazar su valor con NP_VALUE
-            const entry = notas.find(n => n.compKey === inp.dataset.compKey && n.subNombre === inp.dataset.subNombre);
-            if (entry) entry.nota = NP_VALUE;
-        }
-    });
-    // También leer los np-badge (filas ya guardadas como N/P sin input)
-    $('#tablaNotas').querySelectorAll('.np-badge').forEach(badge => {
-        const tr = badge.closest('tr');
-        const npBtn = tr?.querySelector('.btn-np--active');
-        if (npBtn) {
-            // Extraer compKey/subNombre del botón de desmarcar (hermano del badge)
-            const tdNota = badge.closest('td');
-            const inp = tdNota?.querySelector('.input-nota');
-            // Si no hay input (fila N/P renderizada), buscamos datos del hint o del btn
-            // Los datos están en la fila — buscar el exim-hint si existe
-            const hint = tdNota?.querySelector('.exim-hint');
-            if (hint) {
-                const exists = notas.find(n => n.compKey === hint.dataset.hintComp && n.subNombre === hint.dataset.hintSub);
-                if (!exists) notas.push({ compKey: hint.dataset.hintComp, subNombre: hint.dataset.hintSub, nota: NP_VALUE });
-                else exists.nota = NP_VALUE;
-            }
-        }
+        const { compKey, subNombre } = btn.dataset;
+        const entry = notas.find(n => n.compKey === compKey && n.subNombre === subNombre);
+        if (entry) entry.nota = NP_VALUE;
+        else notas.push({ compKey, subNombre, nota: NP_VALUE });
     });
     return notas;
 }
