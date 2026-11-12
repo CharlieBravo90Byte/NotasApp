@@ -306,6 +306,7 @@ async function abrirEditorPlantilla(plantillaId) {
     $('#avisoRevisionPonderaciones').hidden = !editorPlantilla.requiereRevisionPonderaciones;
     $('#confirmarPonderaciones').checked = false;
     $('#inputCodigoRamo').value = editorPlantilla.codigo || '';
+    $('#inputNrcRamo').value = editorPlantilla.nrc || editorPlantilla.nombre.match(/\bNRC\s*[-:]?\s*(\d+)/i)?.[1] || '';
     $('#inputRequisitoRamo').value = editorPlantilla.requisito || '';
     $('#inputSemestreRamo').value = editorPlantilla.semestre ?? ($('#semestreSelect').value.match(/^\d+$/) ? $('#semestreSelect').value : '');
     $('#editReglaExamen').value = editorPlantilla.examenObligatorio === null ? 'desconocido' : editorPlantilla.examenObligatorio ? 'obligatorio' : 'eximible';
@@ -506,6 +507,8 @@ function actualizarTotalPesosComps() {
 $('#btnGuardarPlantilla').addEventListener('click', async () => {
     const nombre = $('#inputNombreRamo').value.trim();
     if (!nombre) { toast('Ingresa un nombre para el ramo', 'error'); return; }
+    const nrc = $('#inputNrcRamo').value.trim();
+    if (nrc && !/^\d{3,10}$/.test(nrc)) { toast('El NRC debe contener solo números', 'error'); return; }
 
     const semestreTexto = $('#inputSemestreRamo').value;
     const semestre = semestreTexto === '' ? null : Number(semestreTexto);
@@ -532,6 +535,7 @@ $('#btnGuardarPlantilla').addEventListener('click', async () => {
     const payload = {
         nombre:            editorPlantilla.nombre,
         codigo:            $('#inputCodigoRamo').value.trim().toUpperCase().replace(/[-\s]/g, '') || null,
+        nrc:               nrc || null,
         requisito:         $('#inputRequisitoRamo').value.trim() || null,
         requiereRevisionPonderaciones: !!editorPlantilla.requiereRevisionPonderaciones && !$('#confirmarPonderaciones').checked,
         semestre,
@@ -552,6 +556,7 @@ $('#btnGuardarPlantilla').addEventListener('click', async () => {
         } else {
             await crearPlantilla(nombre, editorPlantilla.componentes, {
                 codigo: payload.codigo,
+                nrc: payload.nrc,
                 requisito: payload.requisito,
                 semestre,
                 umbralEximen:      editorPlantilla.umbralEximen,
@@ -638,6 +643,7 @@ function renderizarTabla(plantilla, notasAlumno) {
                 const tdComp = document.createElement('td');
                 tdComp.rowSpan = rowspan;
                 tdComp.className = 'td-componente';
+                tdComp.dataset.label = 'Componente';
                 tdComp.innerHTML = `
                     <div class="comp-badge" style="--comp-color:${KEY_COLORS[comp.key] || comp.color || COMP_COLORS[0]}">
                         <span class="comp-badge-label">${escaparHtml(comp.label.toUpperCase())}</span>
@@ -650,12 +656,14 @@ function renderizarTabla(plantilla, notasAlumno) {
 
             // Sub nombre
             const tdSub = document.createElement('td');
+            tdSub.dataset.label = 'Evaluación';
             tdSub.textContent = sub.nombre;
             tr.appendChild(tdSub);
 
             // Contenido / cronograma
             const tdContenido = document.createElement('td');
             tdContenido.className = 'td-contenido';
+            tdContenido.dataset.label = 'Contenido';
             const contenidoTexto = (sub.contenido || '').trim();
             if (contenidoTexto) {
                 const raa = obtenerEtiquetaRAA(contenidoTexto, comp.key, si);
@@ -692,6 +700,7 @@ function renderizarTabla(plantilla, notasAlumno) {
             // Fecha de evaluación
             const tdFecha = document.createElement('td');
             tdFecha.className = 'td-center td-fecha';
+            tdFecha.dataset.label = 'Fecha';
             const fechaInput = document.createElement('input');
             fechaInput.type = 'date';
             fechaInput.className = 'fecha-evaluacion';
@@ -705,6 +714,7 @@ function renderizarTabla(plantilla, notasAlumno) {
             // % parcial (dinámico si es recuperativa)
             const tdPct = document.createElement('td');
             tdPct.className = 'td-center pct-cell';
+            tdPct.dataset.label = '% sub';
             tdPct.dataset.compKey   = comp.key;
             tdPct.dataset.subNombre = sub.nombre;
             tdPct.textContent = pct > 0 ? pct + '%' : '—';
@@ -712,6 +722,7 @@ function renderizarTabla(plantilla, notasAlumno) {
 
             // Celda de nota: input + checkbox N/P
             const tdNota = document.createElement('td');
+            tdNota.dataset.label = 'Nota';
             tdNota.style.cssText = 'vertical-align:middle;';
 
             if (!esNP) {
@@ -763,9 +774,17 @@ function renderizarTabla(plantilla, notasAlumno) {
 
             tr.appendChild(tdNota);
 
+            const tdPortal = document.createElement('td');
+            tdPortal.className = 'td-center nota-portal';
+            tdPortal.dataset.label = 'Nota portal';
+            tdPortal.textContent = notaReg?.notaPortal != null ? String(notaReg.notaPortal).replace('.', ',') : '—';
+            tdPortal.title = notaReg?.fechaNotaPortal ? `Ingresada desde texto pegado: ${new Date(notaReg.fechaNotaPortal).toLocaleString('es-CL')}` : 'Sin nota del portal';
+            tr.appendChild(tdPortal);
+
             // Ponderado
             const tdPond = document.createElement('td');
             tdPond.className = 'td-center ponderado-cell';
+            tdPond.dataset.label = 'Nota final';
             tdPond.textContent = esNP ? 'N/P' : contrib;
             if (esNP) tdPond.style.color = 'var(--text-secondary)';
             tr.appendChild(tdPond);
@@ -777,12 +796,13 @@ function renderizarTabla(plantilla, notasAlumno) {
         const trTotal = document.createElement('tr');
         trTotal.className = 'fila-total';
         trTotal.innerHTML = `
-            <td style="text-align:right;color:var(--text-secondary);font-size:0.82rem;">Promedio componente</td>
+            <td class="total-etiqueta">Promedio componente</td>
             <td class="td-center"></td>
             <td class="td-center"></td>
             <td class="td-center"></td>
-            <td class="td-center"><strong>${redondear(promComp)}</strong></td>
-            <td class="td-center" style="color:var(--text-muted);font-size:0.8rem;">${comp.peso}% NF</td>
+            <td class="td-center total-promedio"><strong>${redondear(promComp)}</strong></td>
+            <td class="td-center"></td>
+            <td class="td-center total-peso">${comp.peso}% NF</td>
         `;
         tbody.appendChild(trTotal);
     }
@@ -1007,24 +1027,9 @@ function actualizarResumen(plantilla, notasAlumno) {
 }
 
 // ══════════════════════════════════════
-//  EXPORTAR
+//  RESET
 // ══════════════════════════════════════
-$('#btnExportarDatos').addEventListener('click', async () => {
-    const uid = sesion.usuarioId;
-    if (!uid) { toast('Selecciona un alumno primero', 'error'); return; }
-    try {
-        const datos = await exportarDatos(uid);
-        const json  = JSON.stringify(datos, null, 2);
-        const blob  = new Blob([json], { type: 'application/json' });
-        const url   = URL.createObjectURL(blob);
-        const a     = document.createElement('a');
-        a.href = url;
-        a.download = `notas_${datos.usuario.nombre}_${new Date().toISOString().slice(0,10)}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast('Datos exportados', 'success');
-    } catch(err) { toast('Error: ' + err.message, 'error'); }
-});
+
 
 // ══════════════════════════════════════
 //  RESET

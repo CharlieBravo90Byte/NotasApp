@@ -15,6 +15,7 @@ Calcula promedios, exención de examen y nota mínima necesaria — todo guardad
 - **Ramos por semestre** — asigna un número de semestre al crear o editar cada ramo y filtra la lista principal. Los ramos anteriores quedan en «Sin asignar». No hay un límite de ramos por semestre.
 - **Importa uno o varios programas PDF UDLA** — extrae localmente la tabla 7.1, los requisitos y los resultados de aprendizaje disponibles, y muestra el resultado de cada archivo. Los ramos existentes no se duplican; se completan los requisitos y la regla de examen si estaban pendientes, y se avisa de condiciones detectadas que la app aún no calcula. No se suben los archivos a un servidor.
 - **Malla y requisitos** — muestra los ramos de la imagen por semestre y evalúa los requisitos conocidos con las notas finales o las notas históricas del alumno. Si faltan requisitos o notas, muestra que no puede determinar el resultado.
+- **Nota portal** — pega la tabla de MiUDLA, revisa las filas detectadas y guárdalas en una columna separada. Las notas de simulación siguen siendo las únicas usadas en los cálculos.
 - **Gestiona alumnos** — cada persona tiene su espacio de notas separado, con opción de eliminar.
 - **Plantillas de ramos dinámicas** — define cualquier estructura de evaluación con componentes y sub-evaluaciones personalizados.
 - **Calcula automáticamente** (con 2 decimales):
@@ -26,8 +27,7 @@ Calcula promedios, exención de examen y nota mínima necesaria — todo guardad
   - Estado: **APROBADO / REPROBADO**
 - **Simulador de exención por nota** — en cada evaluación vacía muestra la nota mínima que necesitas ahí para que, asumiendo 5.5 en el resto, alcances la exención. Se actualiza en tiempo real al tipear.
 - **N/P (No Presentado)** — marca una evaluación como N/P; su porcentaje se reasigna automáticamente a la evaluación recuperativa.
-- **Exporta datos a JSON** para respaldo.
-- **Funciona 100% offline** — no necesita servidor ni internet.
+- **Instalable como PWA** — puede agregarse a la pantalla de inicio y abrirse sin conexión después de su primera carga completa.
 
 ---
 
@@ -51,9 +51,25 @@ npx serve .
 
 > No hay que ejecutar `npm install` ni configurar una base de datos externa; PDF.js se incluye con la aplicación.
 
-Para importar PDF usa el servidor local; la lectura de PDF incluye PDF.js en `vendor/pdfjs`. Se admiten los programas UDLA con texto seleccionable y tablas compatibles; los PDF escaneados requieren revisión manual. Si existen varias tablas, se importa la primera estructura completa sin combinar sus filas; se informa si hay diferencias. Si cambian las evaluaciones obligatorias o los pesos, el resultado queda pendiente de revisión hasta confirmar la estructura en Ramos. La lectura puede omitir aprendizajes divididos entre líneas. Si la regla de examen no se identifica, queda pendiente y puede editarse en Ramos. La app utiliza un umbral fijo de exención de 5,5 y no calcula requisitos de asistencia. La malla incorpora requisitos solo de los programas disponibles, no deduce dependencias por semestre ni sustituye la matrícula oficial. Las notas históricas se guardan por alumno en el navegador y se incluyen al exportar sus datos.
+Para importar PDF usa el servidor local; la lectura de PDF incluye PDF.js en `vendor/pdfjs`. Se admiten los programas UDLA con texto seleccionable y tablas compatibles; los PDF escaneados requieren revisión manual. Si existen varias tablas, se importa la primera estructura completa sin combinar sus filas; se informa si hay diferencias. Si cambian las evaluaciones obligatorias o los pesos, el resultado queda pendiente de revisión hasta confirmar la estructura en Ramos. La lectura puede omitir aprendizajes divididos entre líneas. Si la regla de examen no se identifica, queda pendiente y puede editarse en Ramos. La app utiliza un umbral fijo de exención de 5,5 y no calcula requisitos de asistencia. La malla incorpora requisitos solo de los programas disponibles, no deduce dependencias por semestre ni sustituye la matrícula oficial. Las notas históricas se guardan por alumno en el navegador.
 
 Para verificar los ejemplos y el procesamiento por lotes: `node tests/importar-pdf.test.cjs` y `node tests/importar-lote.test.cjs`.
+
+### Instalar en un celular
+
+Publica la carpeta de la aplicación en una dirección HTTPS y ábrela desde el celular. En Android, usa el menú de Chrome y selecciona **Instalar aplicación** o **Agregar a pantalla principal**. En iPhone, abre la página en Safari y selecciona **Compartir → Agregar a pantalla de inicio**. El nombre de la opción puede variar según el navegador.
+
+La instalación necesita una primera visita con conexión. Después de cargar los archivos, la aplicación puede abrirse sin internet; la tipografía externa puede cambiar si no está disponible. El portal MiUDLA requiere conexión. Las notas y ramos se guardan en el dispositivo y navegador donde se ingresan, sin sincronización automática. Borrar los datos del sitio o de la aplicación puede eliminarlos.
+
+`localhost` sirve para probar la instalación en el propio computador: en el celular apunta al teléfono, no al PC. Acceder por una IP local con HTTP permite probar la página en ciertos casos, pero no habilita la instalación PWA ni el funcionamiento sin conexión; para ello se necesita HTTPS (o localhost en el mismo dispositivo). Al actualizar los archivos incluidos en `service-worker.js`, incrementa también la versión de su caché y actualiza los nombres o versiones de los archivos precargados.
+
+### Leer las notas de MiUDLA
+
+Selecciona el alumno y ramo en NotasApp. En MiUDLA abre **Mis cursos → Notas** y copia la tabla del mismo ramo. Pulsa **Pegar notas MiUDLA**, pega el texto y selecciona **Ver vista previa**. Revisa el alumno, ramo, evaluaciones y notas antes de guardar. Las filas mostradas como «Sin nota» borran la nota portal anterior para esa evaluación; las filas no reconocidas no se modifican.
+
+La app procesa el texto localmente sin extensión ni contraseña. Advierte de porcentajes diferentes, pero no cambia las ponderaciones ni las notas de simulación. Es necesario comprobar que la tabla pertenezca al alumno, ramo y período seleccionados. Para probar el lector con el ejemplo de la tabla: `node tests/miudla.test.cjs`.
+
+También puedes elegir una o varias capturas del mismo ramo en **Notas MiUDLA → Capturas de la tabla de notas → Leer capturas**. El reconocimiento se ejecuta en el dispositivo; puedes corregir el texto detectado antes de pedir otra vista previa. Comprueba cada nota y las filas que figuren como «Sin nota», ya que el reconocimiento puede cometer errores y estas últimas borran la nota portal anterior de esa evaluación. Las filas no reconocidas no se modifican. Para mejores resultados, usa capturas nítidas en las que cada evaluación, porcentaje y nota aparezcan completos en una misma línea. El lector y el modelo de idioma se incluyen en la aplicación; la primera carga de la PWA debe terminar con conexión para usarlos sin internet.
 
 ---
 
@@ -65,7 +81,6 @@ Para verificar los ejemplos y el procesamiento por lotes: `node tests/importar-p
 4. **Ingresa notas** (1.0–7.0) por cada sub-evaluación — los promedios se actualizan en tiempo real.
 5. **Marca N/P** si una evaluación no fue rendida — el porcentaje pasa a la recuperativa.
 6. **Revisa el dashboard** → promedios, exención y nota final al instante.
-7. **Exporta datos** → botón en el header descarga un JSON de respaldo.
 
 ---
 

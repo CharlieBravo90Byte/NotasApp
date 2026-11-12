@@ -115,6 +115,7 @@ function crearPlantilla(nombre, componentes, extras = {}) {
         getStore('plantillas', 'readwrite').add({
             nombre, componentes,
             codigo: extras.codigo ?? null,
+            nrc: extras.nrc ?? null,
             requisito: extras.requisito ?? null,
             condicionesNoCalculadas: extras.condicionesNoCalculadas ?? [],
             requiereRevisionPonderaciones: extras.requiereRevisionPonderaciones ?? false,
@@ -157,6 +158,7 @@ async function guardarNota(usuarioId, plantillaId, compKey, subNombre, nota) {
     const existente = todas.find(n => n.compKey === compKey && n.subNombre === subNombre);
     const store    = getStore('notas', 'readwrite');
     const data     = {
+        ...(existente || {}),
         usuarioId, plantillaId, compKey, subNombre, nota,
         fechaActualizacion: new Date().toISOString()
     };
@@ -165,6 +167,26 @@ async function guardarNota(usuarioId, plantillaId, compKey, subNombre, nota) {
         return promisifyRequest(store.put(data));
     }
     return promisifyRequest(store.add(data));
+}
+
+// La instantánea oficial es independiente de la nota usada en los cálculos.
+async function guardarNotasPortal(usuarioId, plantillaId, entradas) {
+    const existentes = await obtenerNotasPorUsuarioPlantilla(usuarioId, plantillaId);
+    const tx = db.transaction('notas', 'readwrite');
+    const store = tx.objectStore('notas');
+    const actualizado = new Date().toISOString();
+    for (const entrada of entradas) {
+        const anterior = existentes.find(n => n.compKey === entrada.compKey && n.subNombre === entrada.subNombre);
+        const registro = { ...(anterior || {}), usuarioId, plantillaId, compKey: entrada.compKey,
+            subNombre: entrada.subNombre, nota: anterior?.nota ?? null, notaPortal: entrada.notaPortal,
+            fechaNotaPortal: actualizado };
+        if (anterior) store.put(registro); else store.add(registro);
+    }
+    return new Promise((resolve, reject) => {
+        tx.oncomplete = () => resolve(actualizado);
+        tx.onabort = () => reject(tx.error || new Error('No se pudieron guardar las notas del portal'));
+        tx.onerror = () => reject(tx.error || new Error('No se pudieron guardar las notas del portal'));
+    });
 }
 
 function obtenerNotasPorUsuarioPlantilla(usuarioId, plantillaId) {

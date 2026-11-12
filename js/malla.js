@@ -101,6 +101,80 @@ function obtenerDependientes(codigo, plantillas) {
         .sort((a, b) => (a.destino.semestre ?? Infinity) - (b.destino.semestre ?? Infinity) || a.destino.nombre.localeCompare(b.destino.nombre, 'es'));
 }
 
+// El árbol usa los mismos requisitos que el detalle de la malla.
+function obtenerRamosArbol(plantillas) {
+    const ramos = MALLA.filter(r => r.codigo).map(r => {
+        const importado = plantillas.find(p => codigoDePlantilla(p) === r.codigo && p.requisito);
+        return { ...r, requisito: requisitoAplicable(r, importado?.requisito) };
+    });
+    const codigos = new Set(ramos.map(r => r.codigo));
+    for (const plantilla of plantillas) {
+        const codigo = codigoDePlantilla(plantilla);
+        if (!codigo) continue;
+        if (codigos.has(codigo)) {
+            const existente = ramos.find(r => r.codigo === codigo);
+            if (!existente.requisito && plantilla.requisito && !MALLA.some(r => r.codigo === codigo)) existente.requisito = plantilla.requisito;
+            continue;
+        }
+        codigos.add(codigo);
+        ramos.push({ codigo, nombre: plantilla.nombre, semestre: plantilla.semestre, requisito: plantilla.requisito || null });
+    }
+    return ramos;
+}
+
+function dibujarArbolMalla(plantillas, notas) {
+    const contenedor = $('#arbolMalla');
+    contenedor.replaceChildren();
+    const ramos = obtenerRamosArbol(plantillas);
+    const porCodigo = new Map(ramos.map(r => [r.codigo, r]));
+    const destinos = ramos.filter(r => r.requisito).sort((a, b) =>
+        (a.semestre ?? Infinity) - (b.semestre ?? Infinity) || a.nombre.localeCompare(b.nombre, 'es'));
+    if (!destinos.length) {
+        contenedor.textContent = 'Todavía no hay requisitos conocidos para mostrar.';
+        return;
+    }
+    function rama(nodo) {
+        const lista = document.createElement('ul');
+        lista.className = 'arbol-ramas';
+        const item = document.createElement('li');
+        if (nodo.codigo) {
+            const ramo = porCodigo.get(nodo.codigo);
+            const texto = document.createElement('span');
+            texto.className = 'arbol-nodo';
+            const nota = notas[nodo.codigo];
+            texto.textContent = `${ramo ? formatearNombreRamo(ramo) : nodo.codigo + ' · Ramo fuera de la malla'}${ramo?.semestre ? ` (${ramo.semestre}.º sem.)` : ''} · mínimo ${nodo.nota.toFixed(1).replace('.', ',')}${nota != null ? ` · nota ${Number(nota).toFixed(1).replace('.', ',')}` : ' · sin nota'}`;
+            item.appendChild(texto);
+        } else {
+            const operador = document.createElement('strong');
+            operador.className = 'arbol-operador';
+            operador.textContent = nodo.operador === 'Y' ? 'Y · ambos requisitos' : 'O · una de estas alternativas';
+            item.append(operador, rama(nodo.izq), rama(nodo.der));
+        }
+        lista.appendChild(item);
+        return lista;
+    }
+    for (const destino of destinos) {
+        const tarjeta = document.createElement('article');
+        tarjeta.className = 'arbol-destino';
+        const cabecera = document.createElement('div'); cabecera.className = 'arbol-cabecera';
+        const nombre = document.createElement('strong');
+        nombre.textContent = `${destino.semestre ? `${destino.semestre}.º sem. · ` : ''}${formatearNombreRamo(destino)}`;
+        const nodo = interpretarRequisito(destino.requisito);
+        const estado = evaluarRequisito(nodo, notas);
+        const etiqueta = document.createElement('span');
+        etiqueta.className = 'badge ' + (estado === 'cumplido' ? 'badge-success' : estado === 'no cumplido' ? 'badge-error' : 'badge-warning');
+        etiqueta.textContent = estado === 'cumplido' ? 'Requisito cumplido' : estado === 'no cumplido' ? 'Bloqueado por requisito' : 'Pendiente de verificar';
+        cabecera.append(nombre, etiqueta); tarjeta.appendChild(cabecera);
+        if (nodo) tarjeta.appendChild(rama(nodo));
+        else {
+            const detalle = document.createElement('p'); detalle.className = 'help-text';
+            detalle.textContent = `Requisito por revisar: ${destino.requisito}`;
+            tarjeta.appendChild(detalle);
+        }
+        contenedor.appendChild(tarjeta);
+    }
+}
+
 $('#guardarHistorial').addEventListener('click', async () => {
     if (!sesion.usuarioId) { toast('Selecciona un alumno primero', 'error'); return; }
     const codigo = $('#codigoHistorial').value.toUpperCase().replace(/[\s-]/g, '');
@@ -140,6 +214,7 @@ $('#btnMalla').addEventListener('click', async () => {
         if (finales.length === 1) notas[codigo] = finales[0];
         else if (finales.length > 1) delete notas[codigo];
     }
+    dibujarArbolMalla(plantillas, notas);
     const contenedor = $('#mallaContenido');
     contenedor.innerHTML = '';
     for (let semestre = 1; semestre <= 8; semestre++) {
